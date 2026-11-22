@@ -1,0 +1,23 @@
+rules_version = '2';
+// Regras do placar do 2 Vogels 2 Fast: só as coleções do jogo; nada pode ser apagado,
+// e um duelo não pode ter o carro, a pista ou o número trocados depois de criado.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /duels/{id} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['n', 'seed', 'car', 'challenger'])
+                    && request.resource.data.n is int && request.resource.data.seed is int;
+      allow update: if request.resource.data.n == resource.data.n
+                    && request.resource.data.seed == resource.data.seed
+                    && request.resource.data.car == resource.data.car
+                    && request.resource.data.challenger == resource.data.challenger;
+      allow delete: if false;
+    }
+    match /ghosts/{id} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasOnly(['g'])
+                    && request.resource.data.g is string && request.resource.data.g.size() < 900000;
+      allow update, delete: if false;
+    }
+  }
+}
