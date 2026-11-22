@@ -10,7 +10,7 @@ const waLink = txt => 'https://wa.me/?text=' + encodeURIComponent(txt);
 const waBtn = (txt, label) => `<a class="btn wa" href="${waLink(txt)}" target="_blank" rel="noopener">${label}</a>`;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const THEME_NAME = { campo: 'Campo clássico', deserto: 'Deserto ao pôr do sol', cidade: 'Cidade à noite' };
-const GLOW = { escort: '#20e0ff', corsa: '#a64dff', p206: '#3d7bff', golf: '#39ff88', p307: '#ff8a1f', megane: '#b04dff', rsq3: '#7fd4ff', c4r: '#ff2a6d', c4b: '#39ff88' };
+const GLOW = { escort: '#20e0ff', corsa: '#a64dff', p206: '#3d7bff', golf: '#39ff88', p307: '#ff8a1f', p308: '#3d7bff', megane: '#b04dff', rsq3: '#7fd4ff', c4r: '#ff2a6d', c4b: '#39ff88' };
 
 // ---------- renderer ----------
 const canvas = $('#gl');
@@ -144,7 +144,7 @@ function addExtras(root, spec, W, L, clr) {
 }
 
 // ---------- modelos 3D reais (arquivos .bin ao lado da página) ----------
-const REAL_FILE = { c4r: 'c4vts.json', c4b: 'c4vts.json', rsq3: 'rsq3.json' };
+const REAL_FILE = { c4r: 'c4vts.json', c4b: 'c4vts.json', rsq3: 'rsq3.json', p206: 'p206.json' };
 // acabamento de cada carro real (da foto do usuário)
 const CAR_TRIM = {
   c4r: { plate: { kind: 'mercosul', text: 'MIG1J45' }, chev: 'black', tint: 0.85, badge: false, mirror: 'paint', ride: 0 },
@@ -153,6 +153,9 @@ const CAR_TRIM = {
   rsq3: { plate: { kind: 'mercosul', text: 'QIF2C03' }, plateF: [-0.02, 0.5, 2.207], plateR: [0, 0.922, -2.142], plateTilt: [0, 0.05],
     tint: 0.9, mirror: 'alu', chrome: 'alu', caliper: '#1b1c1f', paint: { color: '#c80a12', metalness: 0.05, roughness: 0.28 },
     wheel: 'audi10', wOff: 0, dims: [1.85, 4.43] },
+  // Peugeot 206 1.0 16v prata: modelo 3D do usuário, com as rodas e pneus do próprio modelo; placa cinza fictícia
+  p206: { plate: { kind: 'cinza', text: 'VGL-0206', city: 'SC - FLORIANÓPOLIS' }, plateF: [0, 0.37, 1.958], plateR: [0, 0.8, -1.94], plateTilt: [0, 0.04],
+    tint: 0.7, paint: { color: '#b9bec6', metalness: 0.6, roughness: 0.3 }, caliper: '#3a3c40', wheel: 'model', wOff: 0, dims: [1.65, 3.84] },
 };
 const plateTex = {};
 let carbonTex = null;
@@ -329,20 +332,25 @@ function buildRealCar(spec, rm, ghost) {
   if (trim.tint) { M.glass.color.set('#05070a'); M.glass.opacity = trim.tint; }
   const gmat = ghost ? new THREE.MeshBasicMaterial({ color: '#2be4ff', transparent: true, opacity: 0.3, depthWrite: false }) : null;
   for (const [name, geo] of Object.entries(rm.parts)) {
-    if (name.startsWith('wheel_')) continue;
+    if (/^(wheel|wtire|wrim)_/.test(name)) continue;
     if (ghost && (name === 'interior' || name === 'glass' || name === 'lens' || name === 'taillens')) continue;
     if (name === 'badge' && trim.badge === false) continue;
     const m = new THREE.Mesh(geo, ghost ? gmat : M[name] || M.black);
     m.castShadow = !ghost && (name === 'paint' || name === 'black' || name === 'mirror'); if (name === 'glass' || name === 'lens' || name === 'taillens') m.renderOrder = 2;
     body.add(m);
   }
-  const wheels = [], wk = trim.wheel === 'audi10' ? AUDI_WHEEL : VTR_WHEEL, wOff = trim.wOff ?? 0.03;
+  const wheels = [], wk = trim.wheel === 'audi10' ? AUDI_WHEEL : trim.wheel === 'model' ? { id: 'model', R: rm.wheels.lf[1], w: 0.19 } : VTR_WHEEL, wOff = trim.wOff ?? 0.03;
+  M.wtire = new THREE.MeshStandardMaterial({ color: '#141416', roughness: 0.9 });
+  M.wrim = new THREE.MeshStandardMaterial({ color: '#c4c8ce', metalness: 0.8, roughness: 0.3, envMap: envTex, envMapIntensity: envI * 0.7 });
   for (const [c, ctr] of Object.entries(rm.wheels)) {
     const side = ctr[0] > 0 ? 1 : -1;
     const w = new THREE.Group(); w.position.set(ctr[0] + side * wOff, wk.R, ctr[2]);
     const spin = new THREE.Group(); w.add(spin);
     if (ghost) { const t = new THREE.Mesh(new THREE.CylinderGeometry(wk.R, wk.R, wk.w, 20).rotateZ(Math.PI / 2), gmat); spin.add(t); }
-    else { spin.add(sportWheel(side, wk)); const rotor = new THREE.Mesh(rm.parts['wheel_' + c], M.metal); rotor.position.x = -side * wOff; spin.add(rotor); }
+    else {
+      if (wk.id !== 'model') spin.add(sportWheel(side, wk));
+      for (const [pre, mat] of [['wheel_', M.metal], ['wtire_', M.wtire], ['wrim_', M.wrim]]) if (rm.parts[pre + c]) { const m = new THREE.Mesh(rm.parts[pre + c], mat); m.position.x = -side * wOff; m.castShadow = pre === 'wtire_'; spin.add(m); }
+    }
     root.add(w); wheels.push({ g: w, spin, front: c[1] === 'f' });
   }
   if (!ghost && trim.plate) {
@@ -609,9 +617,10 @@ function drawMap(cv, tr, dots = [], thick = 1) {
 const ENGINES = {
   escort: { cyl: 4, idle: 900, red: 5800, rough: 0.2, tone: 0.75, sport: 0, note: 'carburado' },
   corsa: { cyl: 4, idle: 850, red: 6000, rough: 0.17, tone: 0.8, sport: 0 },
-  p206: { cyl: 4, idle: 800, red: 6500, rough: 0.13, tone: 1.0, sport: 0.3 },
-  golf: { cyl: 4, idle: 780, red: 6200, rough: 0.12, tone: 0.85, sport: 0.2 },
-  p307: { cyl: 4, idle: 780, red: 6400, rough: 0.12, tone: 0.9, sport: 0.2 },
+  p206: { cyl: 4, idle: 850, red: 6800, rough: 0.14, tone: 0.95, sport: 0.15 },
+  golf: { cyl: 4, idle: 800, red: 6000, rough: 0.13, tone: 0.82, sport: 0.1 },
+  p307: { cyl: 4, idle: 800, red: 6800, rough: 0.14, tone: 0.95, sport: 0.45 },
+  p308: { cyl: 4, idle: 750, red: 6300, rough: 0.12, tone: 1.0, sport: 0.6, turbo: true },
   megane: { cyl: 4, idle: 800, red: 6300, rough: 0.13, tone: 0.9, sport: 0.1 },
   rsq3: { cyl: 5, idle: 750, red: 6800, rough: 0.42, tone: 1.2, sport: 1, turbo: true },
   c4r: { cyl: 4, idle: 800, red: 7000, rough: 0.14, tone: 1.1, sport: 0.6 },
@@ -1194,7 +1203,7 @@ function carsView() {
   const mode = UI.flow;
   const bar = (v, max) => `<div class="bar"><i style="width:${Math.round(Math.min(1, v / max) * 100)}%"></i></div>`;
   return `<div class="wrap">${logo()}<div class="card"><h2>${mode === 'duel' ? 'Escolha o carro do desafio' : 'Escolha o carro do treino'}</h2><p class="muted">${mode === 'duel' ? 'Todos os jogadores vão correr com este mesmo carro.' : 'Nada é registrado no treino.'}</p>
-  <div class="cars">${CARS.map(c => `<button class="carc ${UI.sel === c.id ? 'on' : ''}" data-car="${c.id}">${silhouetteSVG(c.body, c.color)}<b>${c.name}</b><span class="muted">${c.year} · ${c.colorName} · ${c.engine}</span>
+  <div class="cars">${CARS.map(c => `<button class="carc ${UI.sel === c.id ? 'on' : ''}" data-car="${c.id}">${silhouetteSVG(c.body, c.color)}<span class="brand">${c.name.split(' ')[0]}</span><b class="${c.name.split(' ').slice(1).join(' ').length > 13 ? 'long' : ''}">${c.name.split(' ').slice(1).join(' ')}</b><span class="muted meta">${c.year} · ${c.engine}</span>
    <div class="bars"><span>Velocidade</span>${bar(c.top - 100, 155)}<span>Aceleração</span>${bar(c.acc - 5, 11)}<span>Direção</span>${bar(c.steer * c.grip - 0.75, 0.45)}</div></button>`).join('')}</div>
   <div class="row" style="margin-top:16px"><button class="btn" data-go="pickcar" ${UI.sel ? '' : 'disabled'}>Sortear pista</button><button class="btn alt" data-go="home">Voltar</button></div></div></div>`;
 }
