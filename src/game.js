@@ -5,6 +5,21 @@ const store = { get(k, d) { try { const v = localStorage.getItem(k); return v ==
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
 const toast = (msg, ms = 3200) => { const el = $('#toast'); el.textContent = msg; el.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => el.style.display = 'none', ms); };
 const WHO = { pai: 'Pai', filho: 'Filho' };
+const FULL = { pai: 'Vogel Pai', filho: 'Vogel Filho' };
+// aviso ao oponente: abre o WhatsApp com a mensagem pronta (a pessoa escolhe o contato e envia)
+const SITE_URL = /github\.io$/.test(location.hostname) ? location.origin + location.pathname : 'https://jeanvogel.github.io/2vogels2fast/';
+const waLink = txt => 'https://wa.me/?text=' + encodeURIComponent(txt);
+function waChallenge(d, run) {
+  const car = carById(d.car);
+  const t = !run || run.state === 'dnf' ? 'não concluiu! Basta terminar a pista para vencer.' : fmt(run.time) + (run.penalty ? ` (com ${run.penalty} s de batidas)` : '');
+  return `🏁 *2 Vogels 2 Fast* · Desafio nº ${d.n}!\n${FULL[d.challenger]} te desafiou com o ${car.name} ${car.year}.\nTempo a bater: ${t}\nUma única tentativa. Bora: ${SITE_URL}`;
+}
+function waResult(d, sc) {
+  const w = d.winner, tm = x => !x ? '—' : x.state === 'dnf' ? 'não concluiu' : fmt(x.time);
+  const head = w === 'empate' ? 'deu EMPATE' : `${FULL[w]} venceu`;
+  return `🏆 *2 Vogels 2 Fast* · Duelo nº ${d.n}: ${head}!\nPai ${tm(d.pai)} × Filho ${tm(d.filho)}\nPlacar: Pai ${sc.pai} × ${sc.filho} Filho${sc.empate ? ` (${sc.empate} empate${sc.empate > 1 ? 's' : ''})` : ''}\nPróximo desafio é do ${FULL[d.challenger === 'pai' ? 'filho' : 'pai']}: ${SITE_URL}`;
+}
+const waBtn = (txt, label) => `<a class="btn wa" href="${waLink(txt)}" target="_blank" rel="noopener">${label}</a>`;
 const other = w => w === 'pai' ? 'filho' : 'pai';
 const THEME_NAME = { campo: 'Campo clássico', deserto: 'Deserto ao pôr do sol', cidade: 'Cidade à noite' };
 const GLOW = { escort: '#20e0ff', corsa: '#a64dff', p206: '#3d7bff', golf: '#39ff88', p307: '#ff8a1f', megane: '#b04dff', rsq3: '#7fd4ff', c4r: '#ff2a6d', c4b: '#39ff88' };
@@ -1052,7 +1067,7 @@ function homeView() {
       const info = `<div class="muted">Desafio nº ${d.n} · ${car.name} ${car.year} ${car.colorName.toLowerCase()} · pista #${d.seed}</div>`;
       if (st.kind === 'respond') action = `<div class="state"><div class="big">O ${WHO[ch]} te desafiou! Tempo a bater: ${cs.state === 'dnf' ? 'não concluiu' : fmt(cs.time)}</div>${info}<div class="warn" style="margin-top:6px">Você terá uma única tentativa.</div></div><button class="btn" data-go="respond">Ver a pista e aceitar</button>`;
       else if (st.kind === 'waitRun') action = `<div class="state cy"><div class="big">O ${WHO[ch]} está correndo o desafio nº ${d.n}…</div>${info}</div>`;
-      else if (st.kind === 'waiting') action = `<div class="state cy"><div class="big">Seu tempo: ${cs.state === 'dnf' ? 'não concluída' : fmt(cs.time)}. Aguardando o ${WHO[other(ch)]}.</div>${info}</div>`;
+      else if (st.kind === 'waiting') action = `<div class="state cy"><div class="big">Seu tempo: ${cs.state === 'dnf' ? 'não concluída' : fmt(cs.time)}. Aguardando o ${WHO[other(ch)]}.</div>${info}</div>${waBtn(waChallenge(d, cs), `Avisar o ${FULL[other(ch)]} no WhatsApp`)}`;
       else if (st.kind === 'abandoned') action = `<div class="state"><div class="big">Sua corrida do desafio nº ${d.n} foi interrompida.</div><div class="muted">Pela regra de uma tentativa, ela conta como não concluída.</div></div><button class="btn" data-go="markdnf">Entendi</button>`;
       else action = `<div class="state cy"><div class="big">Aguardando resultado…</div>${info}</div>`;
     }
@@ -1110,7 +1125,7 @@ function resultView() {
   const r = UI.result; if (!r) return homeView();
   return `<div class="wrap" style="max-width:720px">${logo()}<div class="card" style="text-align:center"><h2 style="font-size:44px;color:${r.color}">${r.title}</h2><p class="big">${r.line}</p><p class="muted">${r.sub || ''}</p>
   ${r.score ? `<div class="score" style="margin:10px 0"><div><div class="n pai">${r.score.pai}</div><div class="who">Pai</div></div><div class="x">×</div><div><div class="n filho">${r.score.filho}</div><div class="who">Filho</div></div></div>` : ''}
-  <div class="row" style="justify-content:center">${r.retry ? '<button class="btn" data-go="retry">Tentar de novo (com seu ghost)</button><button class="btn alt" data-go="treino">Outra pista</button>' : ''}<button class="btn ${r.retry ? 'alt' : ''}" data-go="home">Voltar ao início</button></div></div></div>`;
+  <div class="row" style="justify-content:center">${r.wa ? waBtn(r.wa, r.waLabel) : ''}${r.retry ? '<button class="btn" data-go="retry">Tentar de novo (com seu ghost)</button><button class="btn alt" data-go="treino">Outra pista</button>' : ''}<button class="btn ${r.retry ? 'alt' : ''}" data-go="home">Voltar ao início</button></div></div></div>`;
 }
 function bind() {
   document.querySelectorAll('[data-setwho]').forEach(b => b.onclick = () => setWho(b.dataset.setwho));
@@ -1162,9 +1177,9 @@ async function beginRace() {
     UI.activeRace = true;
     Game.startRace({ track: tr, carId: tr.carId, mode: 'duel', label: label + `<br><span class="muted">Desafio nº ${st.n}</span>`,
       onStart: () => dbSetDuel(id, base, false).catch(e => toast('Erro ao registrar o desafio: ' + (e.code || e.message))),
-      onQuit: async () => { UI.activeRace = false; await finishDuelRun({ id, ...base }, { state: 'dnf' }); UI.result = { title: 'DESISTÊNCIA', color: '#ff2a6d', line: 'A corrida conta como não concluída.', sub: `Agora o ${WHO[other(me)]} só precisa chegar para vencer.` }; UI.view = 'result'; render(); Game.startAttract(); },
+      onQuit: async () => { UI.activeRace = false; await finishDuelRun({ id, ...base }, { state: 'dnf' }); UI.result = { title: 'DESISTÊNCIA', color: '#ff2a6d', line: 'A corrida conta como não concluída.', sub: `Agora o ${WHO[other(me)]} só precisa chegar para vencer.`, wa: waChallenge({ id, ...base }, { state: 'dnf' }), waLabel: `Avisar o ${FULL[other(me)]} no WhatsApp` }; UI.view = 'result'; render(); Game.startAttract(); },
       onFinish: async res => { UI.activeRace = false; await finishDuelRun({ id, ...base }, { state: 'done', time: res.time, raw: res.raw, penalty: res.penalty, splits: res.splits, crashes: res.crashes }, res.ghost);
-        UI.result = { title: 'TEMPO REGISTRADO', color: '#ff7a1a', line: fmt(res.time), sub: penLine(res) + ` · Agora é a vez do ${WHO[other(me)]} tentar bater esse tempo no mesmo carro e pista.` }; UI.view = 'result'; render(); Game.startAttract(); } });
+        UI.result = { title: 'TEMPO REGISTRADO', color: '#ff7a1a', line: fmt(res.time), sub: penLine(res) + ` · Agora é a vez do ${WHO[other(me)]} tentar bater esse tempo no mesmo carro e pista.`, wa: waChallenge({ id, ...base }, { state: 'done', time: res.time, penalty: res.penalty }), waLabel: `Avisar o ${FULL[other(me)]} no WhatsApp` }; UI.view = 'result'; render(); Game.startAttract(); } });
     return;
   }
   if (UI.flow === 'respond') {
@@ -1195,7 +1210,8 @@ function showDuelResult(d, me) {
   const tm = x => !x ? '—' : x.state === 'dnf' ? 'não concluiu' : fmt(x.time) + (x.penalty ? ` (${x.penalty} bat.)` : '');
   const diff = d.pai?.state === 'done' && d.filho?.state === 'done' ? Math.abs(d.pai.time - d.filho.time).toFixed(2) + ' s de diferença' : '';
   UI.result = { title: w === 'empate' ? 'EMPATE!' : w === me ? 'VOCÊ VENCEU!' : 'DERROTA', color: w === 'empate' ? '#ffd23f' : w === me ? '#3dff9a' : '#ff2a6d',
-    line: `Pai ${tm(d.pai)} × Filho ${tm(d.filho)}`, sub: diff + (w === me ? '' : w === 'empate' ? '' : ` · Ponto para o ${WHO[op]}.`) + ` Próximo desafio: o ${WHO[me]} escolhe o carro.`, score: sc };
+    line: `Pai ${tm(d.pai)} × Filho ${tm(d.filho)}`, sub: diff + (w === me ? '' : w === 'empate' ? '' : ` · Ponto para o ${WHO[op]}.`) + ` Próximo desafio: o ${WHO[me]} escolhe o carro.`, score: sc,
+    wa: w ? waResult(d, sc) : null, waLabel: `Contar o resultado ao ${FULL[op]} no WhatsApp` };
   UI.view = 'result'; render(); Game.startAttract();
 }
 
