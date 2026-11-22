@@ -30,6 +30,17 @@ html,body{margin:0;height:100%;background:var(--night);color:var(--ink);font:16p
 [hidden]{display:none!important}
 .btn.wa{background:#25d366;box-shadow:0 4px 0 #0d6b33,0 0 18px rgba(37,211,102,.3);color:#04230f;text-decoration:none;display:inline-flex;align-items:center}
 .btn.wa:hover{filter:brightness(1.08)}
+.spick.many{left:52%;right:2%;gap:1.2cqw;flex-wrap:wrap}.spick.many .stag{min-width:10cqw;padding:.6cqw 1cqw}.spick.many .stag b{font-size:2.6cqw}
+.pinbox{position:absolute;inset:0;display:grid;place-items:center;background:rgba(3,4,10,.72);backdrop-filter:blur(3px);z-index:3}
+.pinbox .card{width:min(420px,86%);text-align:center}
+.pin{font:700 34px 'Saira Condensed',monospace;letter-spacing:.5em;text-align:center;width:180px;padding:8px 0 8px .5em;border-radius:10px;border:2px solid var(--line);background:rgba(0,0,0,.35);color:var(--ink);margin:6px auto 0;display:block}
+.pin:focus,.txt:focus{outline:none;border-color:var(--neon)}
+.txt{font:600 18px Saira,system-ui,sans-serif;width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:2px solid var(--line);background:rgba(0,0,0,.3);color:var(--ink);margin-top:4px}
+.sw{width:38px;height:38px;border-radius:50%;border:3px solid transparent;cursor:pointer;padding:0}.sw.on{border-color:#fff;box-shadow:0 0 0 2px rgba(0,0,0,.6)}
+.rank{display:grid;gap:6px;margin:8px 0;text-align:left}
+.rk{display:grid;grid-template-columns:40px 1fr auto auto;gap:10px;align-items:center;background:rgba(255,255,255,.04);border-radius:10px;padding:8px 12px}
+.rk .pos{font:700 20px 'Saira Condensed';color:var(--dim)}.rk .w{font-weight:700}
+.btn.sm{font-size:14px;padding:6px 12px;min-height:32px;box-shadow:none}
 .logobtn{background:none;border:0;padding:0;cursor:pointer;display:block}
 .logoimg{display:block;width:clamp(220px,30vw,400px);height:auto;filter:drop-shadow(0 6px 18px rgba(0,0,0,.6))}
 .confirm{border:2px solid var(--nitro);background:rgba(255,122,26,.1);border-radius:12px;padding:14px 16px;margin:10px 0}
@@ -669,23 +680,11 @@ const fmt = t => { if (t == null || !isFinite(t)) return '—'; const m = Math.f
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
 const toast = (msg, ms = 3200) => { const el = $('#toast'); el.textContent = msg; el.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => el.style.display = 'none', ms); };
-const WHO = { pai: 'Pai', filho: 'Filho' };
-const FULL = { pai: 'Vogel Pai', filho: 'Vogel Filho' };
-// aviso ao oponente: abre o WhatsApp com a mensagem pronta (a pessoa escolhe o contato e envia)
+// aviso aos outros jogadores: abre o WhatsApp com a mensagem pronta (a pessoa escolhe o contato e envia)
 const SITE_URL = /github\.io$/.test(location.hostname) ? location.origin + location.pathname : 'https://jeanvogel.github.io/2vogels2fast/';
 const waLink = txt => 'https://wa.me/?text=' + encodeURIComponent(txt);
-function waChallenge(d, run) {
-  const car = carById(d.car);
-  const t = !run || run.state === 'dnf' ? 'não concluiu! Basta terminar a pista para vencer.' : fmt(run.time) + (run.penalty ? ` (com ${run.penalty} s de batidas)` : '');
-  return `🏁 *2 Vogels 2 Fast* · Desafio nº ${d.n}!\n${FULL[d.challenger]} te desafiou com o ${car.name} ${car.year}.\nTempo a bater: ${t}\nUma única tentativa. Bora: ${SITE_URL}`;
-}
-function waResult(d, sc) {
-  const w = d.winner, tm = x => !x ? '—' : x.state === 'dnf' ? 'não concluiu' : fmt(x.time);
-  const head = w === 'empate' ? 'deu EMPATE' : `${FULL[w]} venceu`;
-  return `🏆 *2 Vogels 2 Fast* · Duelo nº ${d.n}: ${head}!\nPai ${tm(d.pai)} × Filho ${tm(d.filho)}\nPlacar: Pai ${sc.pai} × ${sc.filho} Filho${sc.empate ? ` (${sc.empate} empate${sc.empate > 1 ? 's' : ''})` : ''}\nPróximo desafio é do ${FULL[d.challenger === 'pai' ? 'filho' : 'pai']}: ${SITE_URL}`;
-}
 const waBtn = (txt, label) => `<a class="btn wa" href="${waLink(txt)}" target="_blank" rel="noopener">${label}</a>`;
-const other = w => w === 'pai' ? 'filho' : 'pai';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const THEME_NAME = { campo: 'Campo clássico', deserto: 'Deserto ao pôr do sol', cidade: 'Cidade à noite' };
 const GLOW = { escort: '#20e0ff', corsa: '#a64dff', p206: '#3d7bff', golf: '#39ff88', p307: '#ff8a1f', megane: '#b04dff', rsq3: '#7fd4ff', c4r: '#ff2a6d', c4b: '#39ff88' };
 
@@ -1417,7 +1416,7 @@ const keys = new Set();
 addEventListener('keydown', e => {
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key) && Game.race) e.preventDefault();
   keys.add(e.code);
-  if (UI.splash && UI.who && !Game.race && (e.code === 'Enter' || e.code === 'Space')) { e.preventDefault(); setWho(UI.who); return; }
+  if (UI.splash && !UI.pinFor && UI.who && isUnlocked(UI.who) && !Game.race && (e.code === 'Enter' || e.code === 'Space')) { e.preventDefault(); setWho(UI.who); return; }
   if (Game.race) {
     if (e.code === 'KeyC') Game.camMode = (Game.camMode + 1) % 3;
     if (e.code === 'KeyR' && Game.race.state === 'race' && Game.race.car.mode !== 'crash') Game.race.car.respawn();
@@ -1624,8 +1623,26 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-// ================= DUELO / BANCO =================
-const DB = { db: null, ready: false, duels: [], local: false, listeners: [] };
+// ================= JOGADORES / RODADAS / BANCO =================
+// Cada desafio é uma rodada: todos os jogadores cadastrados quando ela é lançada correm a mesma pista com o mesmo carro,
+// uma vez cada. Quem fizer o melhor tempo lança a próxima. Rodada parada há mais de ROUND_DAYS fecha com os pendentes como "não correu".
+const DEFAULT_PLAYERS = [{ id: 'pai', name: 'Vogel Pai', color: '#ff7a1a', order: 1 }, { id: 'filho', name: 'Vogel Filho', color: '#2be4ff', order: 2 }];
+const PALETTE = ['#3dff9a', '#ffd23f', '#ff2a6d', '#b04dff', '#7fd4ff', '#ff9ad5', '#c6ff3d'];
+const ROUND_DAYS = 7;
+const DB = { db: null, ready: false, duels: [], players: DEFAULT_PLAYERS.slice(), playersReady: false, playersErr: null, local: false };
+const PL = id => DB.players.find(p => p.id === id) || DEFAULT_PLAYERS.find(p => p.id === id) || { id, name: id, color: '#cccccc' };
+const pname = id => PL(id).name;
+const pshort = id => pname(id).replace(/^Vogel\s+/i, '');
+const ptag = id => `<b style="color:${PL(id).color}">${esc(pname(id))}</b>`;
+// PIN de 4 dígitos: guardado só como resumo (não é segurança forte, é uma tranca de porta)
+function cyrb53(str, seed = 7) { let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed; for (let i = 0; i < str.length; i++) { const ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909); return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36); }
+const pinHash = (id, pin) => cyrb53(`vogels:${id}:${pin}`);
+const unlocked = () => store.get('vr_unlocked', []);
+const isUnlocked = id => DB.playersErr ? true : unlocked().includes(id);
+const unlock = id => store.set('vr_unlocked', [...new Set([...unlocked(), id])]);
+const lock = id => store.set('vr_unlocked', unlocked().filter(x => x !== id));
+
 // fora do Claude: Firestore (Firebase) com a mesma interface do banco do artefato
 async function firebaseDB(cfg) {
   const base = 'https://www.gstatic.com/firebasejs/10.12.2/';
@@ -1648,13 +1665,21 @@ async function initDB() {
     try { DB.db = cl && cl.use ? await cl.use('db') : null; } catch { DB.db = null; }
   }
   if (!DB.db) {
-    DB.local = true; DB.duels = store.get('vr_local_duels', []); DB.ready = true; render(); return;
+    DB.local = true; DB.duels = store.get('vr_local_duels', []); DB.players = store.get('vr_local_players', DEFAULT_PLAYERS.slice());
+    DB.ready = true; DB.playersReady = true; render(); return;
   }
   const to = setTimeout(() => { if (!DB.ready) { DB.ready = true; DB.offline = true; render(); } }, 10000);
   DB.db.collection('duels').orderBy('n', 'desc').limit(300).onSnapshot(snap => {
     DB.duels = snap.docs.map(d => ({ id: d.id, ...d.data() })); if (!snap.metadata.fromCache) { clearTimeout(to); DB.offline = false; }
     DB.ready = true; render();
   }, err => { clearTimeout(to); DB.ready = true; DB.err = err.code; render(); });
+  DB.db.collection('players').orderBy('order', 'asc').limit(50).onSnapshot(snap => {
+    const list = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order || 0) - (b.order || 0));
+    if (!list.length && !snap.metadata.fromCache && !DB.seeded) { DB.seeded = true; for (const p of DEFAULT_PLAYERS) DB.db.doc('players/' + p.id).set({ name: p.name, color: p.color, order: p.order }).catch(() => {}); }
+    if (list.length) DB.players = list;
+    if (!snap.metadata.fromCache || list.length) { DB.playersReady = true; DB.playersErr = null; }
+    render();
+  }, err => { console.warn('players', err); DB.playersErr = err.code || 'erro'; DB.playersReady = true; render(); });
 }
 async function dbSetDuel(id, data, merge) {
   if (DB.local) { const all = store.get('vr_local_duels', []); const i = all.findIndex(d => d.id === id); if (i < 0) all.unshift({ id, ...data }); else all[i] = deepMerge(all[i], data); store.set('vr_local_duels', all); DB.duels = all; render(); return; }
@@ -1662,64 +1687,140 @@ async function dbSetDuel(id, data, merge) {
   try { merge ? await ref.update(data) : await ref.set(data); }
   catch (e) { if (e.code === 'unavailable') { await new Promise(r => setTimeout(r, 600 + Math.random() * 600)); merge ? await ref.update(data) : await ref.set(data); } else throw e; }
 }
+async function dbSetPlayer(id, data, merge) {
+  if (DB.local) { const all = store.get('vr_local_players', DEFAULT_PLAYERS.slice()); const i = all.findIndex(p => p.id === id); if (i < 0) all.push({ id, ...data }); else all[i] = { ...all[i], ...data }; all.sort((a, b) => a.order - b.order); store.set('vr_local_players', all); DB.players = all; render(); return; }
+  const ref = DB.db.doc('players/' + id); merge ? await ref.update(data) : await ref.set(data);
+}
 async function dbSetGhost(id, g) { if (DB.local) { store.set('vr_ghost_' + id, g); return; } await DB.db.doc('ghosts/' + id).set({ g }); }
 async function dbGetGhost(id) { if (DB.local) return store.get('vr_ghost_' + id, null); try { const s = await DB.db.doc('ghosts/' + id).get(); return s.exists ? s.data().g : null; } catch { return null; } }
 function deepMerge(a, b) { const o = { ...a }; for (const k in b) o[k] = b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) ? deepMerge(a[k] || {}, b[k]) : b[k]; return o; }
 
+// ---------- regras da rodada ----------
+const partsOf = d => d.players || ['pai', 'filho'];
+const finished = r => !!r && (r.state === 'done' || r.state === 'dnf');
+const tval = r => r && r.state === 'done' ? r.time : Infinity;
+const expired = d => Date.now() - (d.createdAt || 0) > ROUND_DAYS * 864e5;
 function decide(d) {
-  const a = d.pai || {}, b = d.filho || {};
-  const fin = x => x.state === 'done' || x.state === 'dnf';
-  if (!fin(a) || !fin(b)) return null;
-  if (a.state === 'dnf' && b.state === 'dnf') return 'empate';
-  if (a.state === 'dnf') return 'filho'; if (b.state === 'dnf') return 'pai';
-  if (Math.abs(a.time - b.time) < 0.005) return 'empate';
-  return a.time < b.time ? 'pai' : 'filho';
+  if (Array.isArray(d.winners)) return { winners: d.winners, next: d.winner || d.challenger };
+  if (d.winner && d.winner !== 'empate') return { winners: [d.winner], next: d.winner }; // duelos antigos
+  if (d.winner === 'empate') return { winners: partsOf(d).slice(), next: d.challenger === 'pai' ? 'filho' : 'pai' };
+  const ps = partsOf(d);
+  if (ps.some(id => !finished(d[id])) && !expired(d)) return null;
+  const best = Math.min(...ps.map(id => tval(d[id])));
+  if (!isFinite(best)) return { winners: [], next: d.challenger };
+  const winners = ps.filter(id => Math.abs(tval(d[id]) - best) < 0.005);
+  const next = winners.includes(d.challenger) ? d.challenger : winners.slice().sort((a, b) => (d[a].at || 0) - (d[b].at || 0))[0];
+  return { winners, next };
 }
+const listJoin = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' e ' + a[a.length - 1];
+// posição com empate: 1 + quantos fizeram tempo melhor
+const placeOf = (d, id) => { const t = tval(d[id]); return isFinite(t) ? 1 + partsOf(d).filter(x => tval(d[x]) < t - 0.0049).length : null; };
+function standings(d) { return partsOf(d).map(id => ({ id, run: d[id] || null })).sort((a, b) => tval(a.run) - tval(b.run) || (finished(b.run) - finished(a.run))); }
+function leader(d, except) { let b = null; for (const id of partsOf(d)) { if (id === except) continue; const r = d[id]; if (r && r.state === 'done' && (!b || r.time < b.run.time)) b = { id, run: r }; } return b; }
 function scoreboard() {
-  const s = { pai: 0, filho: 0, empate: 0 };
-  for (const d of DB.duels) { const w = d.winner || decide(d); if (w) s[w]++; }
+  const s = {}; for (const p of DB.players) s[p.id] = { wins: 0, played: 0 };
+  for (const d of DB.duels) { const r = decide(d); if (!r) continue; for (const id of partsOf(d)) { s[id] = s[id] || { wins: 0, played: 0 }; if (finished(d[id]) || expired(d)) s[id].played++; } for (const w of r.winners) { s[w] = s[w] || { wins: 0, played: 0 }; s[w].wins++; } }
   return s;
 }
 function duelState(me) {
-  const last = DB.duels[0];
-  if (!last || last.winner || decide(last)) {
-    const next = last ? other(last.challenger) : null;
-    return { kind: 'new', challenger: next, mine: !next || next === me, n: (last ? last.n : 0) + 1 };
-  }
-  const ch = last.challenger, rp = other(ch);
-  const mineSt = (last[me] || {}).state, chSt = (last[ch] || {}).state;
-  if (me === rp) {
-    if (!mineSt) return { kind: chSt === 'started' ? 'waitRun' : 'respond', duel: last };
-    if (mineSt === 'started') return { kind: 'abandoned', duel: last };
-    return { kind: 'waitResult', duel: last };
-  }
-  return { kind: mineSt === 'started' ? 'abandoned' : 'waiting', duel: last };
+  const last = DB.duels[0], res = last ? decide(last) : null;
+  if (!last || res) { const next = res ? res.next : null; const known = next && DB.players.some(p => p.id === next);
+    return { kind: 'new', starter: known ? next : null, mine: !known || next === me, n: (last ? last.n : 0) + 1, prev: last, res }; }
+  const ps = partsOf(last);
+  if (!ps.includes(me)) return { kind: 'spectator', duel: last };
+  const mine = (last[me] || {}).state;
+  if (!mine) return { kind: 'run', duel: last };
+  if (mine === 'started') return { kind: 'abandoned', duel: last };
+  return { kind: 'waiting', duel: last, pending: ps.filter(id => !finished(last[id])) };
+}
+// rodada vencida pelo prazo: quem abrir o jogo registra o resultado
+function finalizeExpired() {
+  const last = DB.duels[0]; if (!last || last.winners || DB.finalizing === last.id) return;
+  const res = decide(last); if (!res || !expired(last)) return;
+  DB.finalizing = last.id; dbSetDuel(last.id, { winner: res.next, winners: res.winners }, true).catch(() => {});
+}
+
+// ---------- mensagens de WhatsApp ----------
+const tmTxt = r => !r ? 'não correu' : r.state === 'dnf' ? 'não concluiu' : r.state === 'started' ? 'correndo' : fmt(r.time);
+function waChallenge(d) {
+  const car = carById(d.car), b = leader(d);
+  return `🏁 *2 Vogels 2 Fast* · Desafio nº ${d.n}!\n${pname(d.challenger)} lançou o desafio com o ${car.name} ${car.year}.\n`
+    + (b ? `Tempo a bater: ${fmt(b.run.time)} (${pname(b.id)})` : 'Ninguém completou ainda: basta terminar a pista para liderar.')
+    + `\nTodos correm uma vez; quem vencer lança o próximo. Bora: ${SITE_URL}`;
+}
+function waResult(d, res) {
+  const head = !res.winners.length ? 'ninguém concluiu' : res.winners.length > 1 ? `empate entre ${listJoin(res.winners.map(pname))}` : `${pname(res.winners[0])} venceu`;
+  const lines = standings(d).map(x => `${placeOf(d, x.id) ? placeOf(d, x.id) + 'º' : '–'} ${pname(x.id)}: ${tmTxt(x.run)}`).join('\n');
+  return `🏆 *2 Vogels 2 Fast* · Desafio nº ${d.n}: ${head}!\n${lines}\nPróximo desafio é do ${pname(res.next)}: ${SITE_URL}`;
 }
 
 // ================= TELAS =================
 const UI = { who: store.get('vr_who', null), splash: true, view: 'home', sel: null, seed: null, track: null, busy: false, activeRace: false };
-function setWho(w) { Audio.init(); UI.who = w; UI.splash = false; store.set('vr_who', w); render(); }
+function setWho(w) { Audio.init(); UI.who = w; UI.splash = false; UI.pinFor = null; store.set('vr_who', w); render(); }
 function render() {
   if (Game.race || UI.activeRace) return;
   const el = $('#screen'); el.classList.remove('hidden');
-  if (UI.splash || !UI.who) { el.innerHTML = splashView(); bindWho(); return; }
+  if (UI.splash || !UI.who || !isUnlocked(UI.who)) { el.innerHTML = splashView(); bindWho(); const pi = $('#pinIn'); if (pi) pi.focus(); return; }
+  finalizeExpired();
   const v = UI.view;
-  el.innerHTML = v === 'home' ? homeView() : v === 'cars' ? carsView() : v === 'track' ? trackView() : v === 'history' ? historyView() : v === 'help' ? helpView() : v === 'result' ? resultView() : homeView();
+  el.innerHTML = v === 'home' ? homeView() : v === 'cars' ? carsView() : v === 'track' ? trackView() : v === 'history' ? historyView() : v === 'help' ? helpView() : v === 'result' ? resultView() : v === 'invite' ? inviteView() : homeView();
   bind();
   if (v === 'track' && UI.track) requestAnimationFrame(() => { const c = $('#bigmap'); if (c) { const r = c.getBoundingClientRect(); c.width = r.width * 2; c.height = r.height * 2; drawMap(c, UI.track, [], 2.2); } });
 }
 function logo() { return `<div><button class="logobtn" data-go="splash" title="Voltar à abertura"><img class="logoimg" src="logo.webp" alt="2 Vogels 2 Fast · Bloodline Racing"></button></div>`; }
 const logoImg = new Image(); logoImg.src = 'logo.webp';
-// tela de abertura: arte com o Pai e o Lucas; clicar no nome entra como aquele jogador
+// tela de abertura: a capa e um botão por jogador; entrar pede o PIN do perfil (só na primeira vez em cada aparelho)
 function splashView() {
-  const tag = (w, small, big) => `<button class="stag ${w}${UI.who === w ? ' last' : ''}" data-who="${w}"><span>${small}</span><b>${big}</b><i>${UI.who === w ? 'Enter para entrar' : UI.who ? 'trocar de jogador' : 'entrar'}</i></button>`;
-  return `<div class="splash"><div class="art169"><img src="abertura.jpg" alt="2 Vogels 2 Fast: o Pai e o Lucas com os carros da família"><div class="spick">${tag('pai', 'VOGEL', 'PAI')}${tag('filho', 'VOGEL', 'FILHO')}</div></div></div>`;
+  const many = DB.players.length > 3;
+  const tag = p => { const m = /^vogel\s+(.+)$/i.exec(p.name); const small = m ? 'VOGEL' : '', big = m ? m[1] : p.name;
+    const hint = isUnlocked(p.id) ? (UI.who === p.id ? 'Enter para entrar' : 'entrar') : DB.playersReady && !p.pin ? 'criar PIN' : 'PIN';
+    return `<button class="stag${UI.who === p.id && isUnlocked(p.id) ? ' last' : ''}" style="color:${p.color}" data-who="${esc(p.id)}"><span>${small}</span><b style="text-shadow:0 0 24px ${p.color}99">${esc(big.toUpperCase())}</b><i>${hint}</i></button>`; };
+  return `<div class="splash"><div class="art169"><img src="abertura.jpg" alt="2 Vogels 2 Fast: o Pai e o Lucas com os carros da família"><div class="spick${many ? ' many' : ''}">${DB.players.map(tag).join('')}</div>${UI.pinFor ? pinBox() : ''}</div></div>`;
 }
-function whoView() {
-  return `<div class="wrap" style="max-width:640px">${logo()}<div class="card"><h2>Quem está jogando neste computador?</h2><p class="muted">Fica salvo neste navegador. Dá para trocar depois.</p>
-  <div class="row"><button class="btn" data-who="pai">Sou o Pai</button><button class="btn cy" data-who="filho">Sou o Filho</button></div></div></div>`;
+function pinBox() {
+  const p = PL(UI.pinFor), st = UI.pinStep;
+  const title = !DB.playersReady ? 'Carregando os perfis…' : st === 'create' ? 'Crie o seu PIN' : st === 'confirm' ? 'Repita o PIN' : 'Digite o seu PIN';
+  const sub = st === 'create' ? 'Quatro números. É fixo: guarde bem, ele vai ser pedido para entrar neste perfil em outro aparelho.' : st === 'confirm' ? 'Só para conferir.' : 'Pedido só na primeira vez neste aparelho.';
+  return `<div class="pinbox"><div class="card"><div class="muted">Entrar como</div><h2 style="color:${p.color};margin:0 0 6px">${esc(p.name)}</h2><h3>${title}</h3><p class="muted">${sub}</p>
+   <input id="pinIn" class="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="4" pattern="[0-9]*" placeholder="••••" ${DB.playersReady ? '' : 'disabled'}>
+   <p class="warn" id="pinErr">${UI.pinErr || ''}</p>
+   <div class="row" style="justify-content:center"><button class="btn" data-pin="ok" ${DB.playersReady ? '' : 'disabled'}>Entrar</button><button class="btn alt" data-pin="cancel">Cancelar</button></div></div></div>`;
 }
-function bindWho() { document.querySelectorAll('[data-who]').forEach(b => b.onclick = () => setWho(b.dataset.who)); }
+function bindWho() {
+  document.querySelectorAll('[data-who]').forEach(b => b.onclick = () => pickProfile(b.dataset.who));
+  const ok = $('[data-pin=ok]'), cancel = $('[data-pin=cancel]'), inp = $('#pinIn');
+  if (ok) ok.onclick = () => submitPin();
+  if (cancel) cancel.onclick = () => { UI.pinFor = null; UI.pinErr = ''; render(); };
+  if (inp) inp.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') submitPin(); if (e.key === 'Escape') { UI.pinFor = null; render(); } };
+}
+function pickProfile(id) {
+  Audio.init();
+  if (isUnlocked(id)) { setWho(id); return; }
+  UI.pinFor = id; UI.pinErr = ''; UI.pinStep = PL(id).pin ? 'enter' : 'create'; render();
+}
+async function submitPin() {
+  const id = UI.pinFor, v = ($('#pinIn')?.value || '').trim(), p = PL(id);
+  if (!DB.playersReady) return;
+  if (!/^\d{4}$/.test(v)) { UI.pinErr = 'O PIN tem 4 números.'; render(); return; }
+  if (UI.pinStep === 'enter' || p.pin) {
+    if (p.pin && pinHash(id, v) === p.pin) { unlock(id); setWho(id); } else { UI.pinErr = 'PIN incorreto.'; UI.pinStep = 'enter'; render(); }
+    return;
+  }
+  if (UI.pinStep === 'create') { UI.pinTmp = v; UI.pinStep = 'confirm'; UI.pinErr = ''; render(); return; }
+  if (v !== UI.pinTmp) { UI.pinErr = 'Os dois PINs não batem. Comece de novo.'; UI.pinStep = 'create'; render(); return; }
+  try { await dbSetPlayer(id, { pin: pinHash(id, v) }, true); unlock(id); toast('PIN criado. Bem-vindo, ' + p.name + '!'); setWho(id); }
+  catch (e) { UI.pinErr = 'Não consegui salvar o PIN (' + (e.code || e.message) + ').'; UI.pinStep = 'create'; render(); }
+}
+function rankHTML(sc, big) {
+  const list = DB.players.map(p => ({ p, s: sc[p.id] || { wins: 0, played: 0 } })).sort((a, b) => b.s.wins - a.s.wins || a.p.order - b.p.order);
+  if (big && list.length === 2) {
+    const [a, b] = DB.players; return `<div class="score"><div><div class="n" style="color:${a.color}">${(sc[a.id] || {}).wins || 0}</div><div class="who">${esc(pshort(a.id))}</div></div><div class="x">×</div><div><div class="n" style="color:${b.color}">${(sc[b.id] || {}).wins || 0}</div><div class="who">${esc(pshort(b.id))}</div></div></div>`;
+  }
+  return `<div class="rank">${list.map(x => `<div class="rk"><span class="pos">${1 + list.filter(y => y.s.wins > x.s.wins).length}º</span><b style="color:${x.p.color}">${esc(x.p.name)}</b><span class="w">${x.s.wins} vitória${x.s.wins === 1 ? '' : 's'}</span><span class="muted">${x.s.played} desafio${x.s.played === 1 ? '' : 's'}</span></div>`).join('')}</div>`;
+}
+function standingsHTML(d) {
+  return `<div class="rank">${standings(d).map(x => `<div class="rk"><span class="pos">${placeOf(d, x.id) ? placeOf(d, x.id) + 'º' : '–'}</span><b style="color:${PL(x.id).color}">${esc(pname(x.id))}</b><span class="w">${tmTxt(x.run)}</span><span class="muted">${x.run && x.run.penalty ? x.run.penalty + ' s de batidas' : ''}</span></div>`).join('')}</div>`;
+}
 function homeView() {
   const sc = scoreboard(), me = UI.who;
   let action = '';
@@ -1727,33 +1828,47 @@ function homeView() {
   else {
     const st = duelState(me);
     if (st.kind === 'new') {
-      if (st.mine) action = `<div class="state"><div class="big">Sua vez de desafiar${st.challenger ? '' : ' (primeiro duelo!)'}</div><div class="muted">Você escolhe o carro, sorteia a pista e corre. Os dois correm com o mesmo carro na mesma pista.</div></div><button class="btn" data-go="newduel">Criar desafio nº ${st.n}</button>`;
-      else action = `<div class="state cy"><div class="big">Aguardando o ${WHO[st.challenger]} criar o desafio nº ${st.n}</div><div class="muted">Enquanto isso, que tal um treino livre?</div></div>`;
+      const why = st.res && st.res.winners.includes(me) ? `Você venceu o desafio nº ${st.prev.n} e lança o próximo.` : !st.prev ? 'Primeiro desafio!' : 'Você lança o próximo desafio.';
+      if (st.mine) action = `<div class="state"><div class="big">Sua vez de lançar o desafio nº ${st.n}</div><div class="muted">${why} Você escolhe o carro, sorteia a pista e corre; depois todos correm a mesma pista com o mesmo carro.</div></div><button class="btn" data-go="newduel">Lançar desafio nº ${st.n}</button>`;
+      else action = `<div class="state cy"><div class="big">Aguardando ${esc(pname(st.starter))} lançar o desafio nº ${st.n}</div><div class="muted">Quem vence um desafio lança o próximo. Enquanto isso, que tal um treino livre?</div></div>`;
     } else {
-      const d = st.duel, ch = d.challenger, cs = d[ch] || {}, car = carById(d.car);
-      const info = `<div class="muted">Desafio nº ${d.n} · ${car.name} ${car.year} ${car.colorName.toLowerCase()} · pista #${d.seed}</div>`;
-      if (st.kind === 'respond') action = `<div class="state"><div class="big">O ${WHO[ch]} te desafiou! Tempo a bater: ${cs.state === 'dnf' ? 'não concluiu' : fmt(cs.time)}</div>${info}<div class="warn" style="margin-top:6px">Você terá uma única tentativa.</div></div><button class="btn" data-go="respond">Ver a pista e aceitar</button>`;
-      else if (st.kind === 'waitRun') action = `<div class="state cy"><div class="big">O ${WHO[ch]} está correndo o desafio nº ${d.n}…</div>${info}</div>`;
-      else if (st.kind === 'waiting') action = `<div class="state cy"><div class="big">Seu tempo: ${cs.state === 'dnf' ? 'não concluída' : fmt(cs.time)}. Aguardando o ${WHO[other(ch)]}.</div>${info}</div>${waBtn(waChallenge(d, cs), `Avisar o ${FULL[other(ch)]} no WhatsApp`)}`;
+      const d = st.duel, car = carById(d.car), b = leader(d, me);
+      const info = `<div class="muted">Desafio nº ${d.n} de ${esc(pname(d.challenger))} · ${car.name} ${car.year} ${car.colorName.toLowerCase()} · pista #${d.seed}</div>`;
+      if (st.kind === 'run') action = `<div class="state"><div class="big">${esc(pname(d.challenger))} lançou o desafio nº ${d.n}! ${b ? 'Tempo a bater: ' + fmt(b.run.time) + ' (' + esc(pshort(b.id)) + ')' : 'Ninguém completou ainda.'}</div>${info}<div class="warn" style="margin-top:6px">Você terá uma única tentativa.</div></div><button class="btn" data-go="respond">Ver a pista e correr</button>`;
+      else if (st.kind === 'waiting') action = `<div class="state cy"><div class="big">Seu tempo: ${tmTxt(d[me])}. Faltam correr: ${st.pending.map(id => esc(pshort(id))).join(', ')}.</div>${info}</div>${standingsHTML(d)}${waBtn(waChallenge(d), 'Avisar no WhatsApp')}`;
       else if (st.kind === 'abandoned') action = `<div class="state"><div class="big">Sua corrida do desafio nº ${d.n} foi interrompida.</div><div class="muted">Pela regra de uma tentativa, ela conta como não concluída.</div></div><button class="btn" data-go="markdnf">Entendi</button>`;
-      else action = `<div class="state cy"><div class="big">Aguardando resultado…</div>${info}</div>`;
+      else action = `<div class="state cy"><div class="big">Desafio nº ${d.n} em andamento.</div>${info}<div class="muted">Você entrou depois que ele foi lançado: participa a partir do próximo.</div></div>${standingsHTML(d)}`;
     }
   }
-  const lastDone = DB.duels.find(d => d.winner);
-  const lastLine = lastDone ? `<p class="muted">Último duelo (nº ${lastDone.n}): ${lastDone.winner === 'empate' ? 'empate' : 'vitória do ' + WHO[lastDone.winner]} · Pai ${lastDone.pai?.state === 'dnf' ? 'DNF' : fmt(lastDone.pai?.time)} × Filho ${lastDone.filho?.state === 'dnf' ? 'DNF' : fmt(lastDone.filho?.time)}</p>` : '';
-  const note = DB.local ? `<p class="muted">Placar salvo só neste navegador (sem conexão com o banco compartilhado).</p>` : DB.err ? `<p class="warn">Não foi possível acessar o placar compartilhado (${DB.err}).</p>` : DB.offline ? `<p class="warn">O placar ainda não respondeu; pode estar desatualizado.</p>` : '';
+  const lastDone = DB.duels.find(d => decide(d));
+  const lastRes = lastDone && decide(lastDone);
+  const lastLine = lastRes ? `<p class="muted">Último desafio (nº ${lastDone.n}): ${lastRes.winners.length > 1 ? 'empate entre ' + esc(listJoin(lastRes.winners.map(pname))) : lastRes.winners.length ? 'vitória do ' + esc(pname(lastRes.winners[0])) : 'ninguém concluiu'} · ${standings(lastDone).map(x => esc(pshort(x.id)) + ' ' + tmTxt(x.run)).join(' · ')}</p>` : '';
+  const note = DB.local ? `<p class="muted">Placar salvo só neste navegador (sem conexão com o banco compartilhado).</p>` : DB.err ? `<p class="warn">Não foi possível acessar o placar compartilhado (${DB.err}).</p>` : DB.playersErr ? `<p class="warn">Os perfis e PINs ainda não estão liberados no banco (${DB.playersErr}).</p>` : DB.offline ? `<p class="warn">O placar ainda não respondeu; pode estar desatualizado.</p>` : '';
   return `<div class="wrap">${logo()}<div class="grid2">
-   <div class="card"><h3>Placar geral</h3><div class="score"><div><div class="n pai">${sc.pai}</div><div class="who">Pai</div></div><div class="x">×</div><div><div class="n filho">${sc.filho}</div><div class="who">Filho</div></div></div>
-     <p class="muted" style="text-align:center;margin:8px 0 0">${sc.empate} empate${sc.empate === 1 ? '' : 's'} · ${DB.duels.length} duelo${DB.duels.length === 1 ? '' : 's'}</p>${lastLine}${note}</div>
-   <div class="card"><div class="row" style="justify-content:space-between;margin-bottom:8px"><h3 style="margin:0">Jogando como</h3><div class="tog"><button class="p ${me === 'pai' ? 'on' : ''}" data-setwho="pai">Pai</button><button class="f ${me === 'filho' ? 'on' : ''}" data-setwho="filho">Filho</button></div></div>
+   <div class="card"><h3>Placar geral</h3>${rankHTML(sc, true)}
+     <p class="muted" style="text-align:center;margin:8px 0 0">${DB.duels.length} desafio${DB.duels.length === 1 ? '' : 's'} · quem vence lança o próximo</p>${lastLine}${note}</div>
+   <div class="card"><div class="row" style="justify-content:space-between;margin-bottom:8px"><h3 style="margin:0">Jogando como ${ptag(me)}</h3><div class="row" style="gap:6px"><button class="btn alt sm" data-go="splash">Trocar</button><button class="btn alt sm" data-go="logout" title="Pede o PIN de novo neste aparelho">Sair</button></div></div>
      ${action}
-     <div class="row" style="margin-top:16px"><button class="btn alt" data-go="treino">Treino livre</button><button class="btn alt" data-go="history">Histórico</button><button class="btn alt" data-go="help">Controles</button></div></div>
+     <div class="row" style="margin-top:16px"><button class="btn alt" data-go="treino">Treino livre</button><button class="btn alt" data-go="history">Histórico</button><button class="btn alt" data-go="invite">Convidar jogador</button><button class="btn alt" data-go="help">Controles</button></div></div>
   </div></div>`;
+}
+function inviteView() {
+  const used = DB.players.map(p => p.color), free = PALETTE.filter(c => !used.includes(c));
+  UI.inviteColor = UI.inviteColor && free.includes(UI.inviteColor) ? UI.inviteColor : free[0] || PALETTE[0];
+  const done = UI.invited ? PL(UI.invited) : null;
+  return `<div class="wrap" style="max-width:680px">${logo()}<div class="card"><h2>Convidar jogador</h2>
+  ${done ? `<div class="state"><div class="big">Perfil ${ptag(done.id)} criado!</div><div class="muted">Mande o link para ele. Na primeira vez, ele toca no próprio nome na abertura e cria o PIN. Ele entra a partir do próximo desafio lançado.</div></div>
+   <div class="row">${waBtn(`🏁 Você foi convidado para o *2 Vogels 2 Fast · Bloodline Racing*!\nEntre no perfil ${done.name}, crie o seu PIN e prepare-se: todos correm a mesma pista e quem vencer lança o próximo desafio.\n${SITE_URL}`, 'Mandar o convite no WhatsApp')}<button class="btn alt" data-go="home">Voltar</button></div>`
+  : `<p class="muted">Quem for convidado entra nos desafios a partir do próximo lançado. O PIN é criado pela própria pessoa no primeiro acesso.</p>
+   <label class="muted" for="invName">Nome do perfil</label><input id="invName" class="txt" maxlength="20" placeholder="Vogel Avô" value="${esc(UI.inviteName || '')}">
+   <div class="muted" style="margin-top:12px">Cor</div><div class="row" style="gap:8px;margin:6px 0 4px">${(free.length ? free : PALETTE).map(c => `<button class="sw${c === UI.inviteColor ? ' on' : ''}" style="background:${c}" data-color="${c}" aria-label="cor ${c}"></button>`).join('')}</div>
+   <p class="warn">${UI.inviteErr || ''}</p>
+   <div class="row"><button class="btn" data-go="createplayer">Criar perfil</button><button class="btn alt" data-go="home">Voltar</button></div>`}</div></div>`;
 }
 function carsView() {
   const mode = UI.flow;
   const bar = (v, max) => `<div class="bar"><i style="width:${Math.round(Math.min(1, v / max) * 100)}%"></i></div>`;
-  return `<div class="wrap">${logo()}<div class="card"><h2>${mode === 'duel' ? 'Escolha o carro do desafio' : 'Escolha o carro do treino'}</h2><p class="muted">${mode === 'duel' ? 'O adversário vai correr com este mesmo carro.' : 'Nada é registrado no treino.'}</p>
+  return `<div class="wrap">${logo()}<div class="card"><h2>${mode === 'duel' ? 'Escolha o carro do desafio' : 'Escolha o carro do treino'}</h2><p class="muted">${mode === 'duel' ? 'Todos os jogadores vão correr com este mesmo carro.' : 'Nada é registrado no treino.'}</p>
   <div class="cars">${CARS.map(c => `<button class="carc ${UI.sel === c.id ? 'on' : ''}" data-car="${c.id}">${silhouetteSVG(c.body, c.color)}<b>${c.name}</b><span class="muted">${c.year} · ${c.colorName} · ${c.engine}</span>
    <div class="bars"><span>Velocidade</span>${bar(c.top - 100, 155)}<span>Aceleração</span>${bar(c.acc - 5, 11)}<span>Direção</span>${bar(c.steer * c.grip - 0.75, 0.45)}</div></button>`).join('')}</div>
   <div class="row" style="margin-top:16px"><button class="btn" data-go="pickcar" ${UI.sel ? '' : 'disabled'}>Sortear pista</button><button class="btn alt" data-go="home">Voltar</button></div></div></div>`;
@@ -1761,20 +1876,22 @@ function carsView() {
 function trackView() {
   const tr = UI.track, car = carById(tr.carId), mode = UI.flow;
   const resp = mode === 'respond';
-  const d = UI.duel, target = resp ? (d[d.challenger] || {}) : null;
+  const d = UI.duel, b = resp ? leader(d, UI.who) : null;
   return `<div class="wrap">${logo()}<div class="grid2"><div class="card"><div class="mapbox"><canvas id="bigmap"></canvas></div><p class="muted" style="margin:8px 0 0"><span style="color:#3dff9a">●</span> largada · ■ chegada · <span style="color:#ff7a1a">●</span> loop · <span style="color:#2be4ff">●</span> salto</p></div>
   <div class="card"><h2>Pista #${tr.seed}</h2><div class="muted">${THEME_NAME[tr.theme]}</div>
    <div class="stats"><div class="stat"><span class="muted">Extensão</span><b>${(tr.length / 1000).toFixed(2)} km</b></div><div class="stat"><span class="muted">Carro</span><b style="font-size:20px">${car.name.replace(/^(Ford|Chevrolet|Volkswagen|Renault|Citroën|Peugeot|Audi) /, '')} ${car.year}</b></div>
    <div class="stat"><span class="muted">Loops</span><b>${tr.features.loops}</b></div><div class="stat"><span class="muted">Saltos</span><b>${tr.features.jumps}</b></div></div>
-   ${resp ? `<p class="big">Tempo a bater: ${target.state === 'dnf' ? 'o ' + WHO[d.challenger] + ' não concluiu — basta chegar!' : fmt(target.time) + (target.penalty ? ` <span class="muted">(inclui ${target.penalty} s de batidas)</span>` : '')}</p><p class="muted">O ghost do ${WHO[d.challenger]} corre junto com você. Cada segundo batendo na mureta soma 1 s ao seu tempo final.</p>` : ''}
+   ${resp ? (b ? `<p class="big">Tempo a bater: ${fmt(b.run.time)} <span class="muted">(${esc(pname(b.id))}${b.run.penalty ? `, inclui ${b.run.penalty} s de batidas` : ''})</span></p><p class="muted">O ghost do melhor tempo corre junto com você. Cada segundo batendo na mureta soma 1 s ao seu tempo final.</p>`
+     : `<p class="big">Ninguém completou ainda: basta chegar para liderar.</p>`) : ''}
    ${mode === 'treino' ? '' : '<p class="warn">Uma única tentativa: ao começar a contagem, a corrida vale.</p>'}
    ${UI.confirm && mode !== 'treino' ? confirmBox(mode, d) : ''}
    <div class="row"${UI.confirm && mode !== 'treino' ? ' hidden' : ''}><button class="btn" data-go="${mode === 'treino' ? 'race' : 'askrace'}">${mode === 'treino' ? 'Correr' : 'Começar a corrida'}</button>${resp ? '' : '<button class="btn alt" data-go="reroll">Sortear outra pista</button>'}<button class="btn alt" data-go="home">Voltar</button></div></div></div></div>`;
 }
 function historyView() {
-  const rows = DB.duels.map(d => { const w = d.winner || decide(d); const c = carById(d.car); const t = x => !x ? '—' : x.state === 'dnf' ? 'DNF' : x.state === 'started' ? 'correndo' : fmt(x.time) + (x.penalty ? ` <span class="muted">(+${x.penalty})</span>` : '');
-    return `<tr><td class="num">${d.n}</td><td>${new Date(d.createdAt || 0).toLocaleDateString('pt-BR')}</td><td>${WHO[d.challenger]}</td><td>${c.name} ${c.year}</td><td class="num">${t(d.pai)}</td><td class="num">${t(d.filho)}</td><td>${w ? (w === 'empate' ? 'Empate' : '<b class="' + w + '">' + WHO[w] + '</b>') : 'em andamento'}</td></tr>`; }).join('');
-  return `<div class="wrap">${logo()}<div class="card"><h2>Histórico de duelos</h2>${DB.duels.length ? `<div class="scroll"><table><thead><tr><th>Nº</th><th>Data</th><th>Desafiante</th><th>Carro</th><th style="text-align:right">Pai</th><th style="text-align:right">Filho</th><th>Vencedor</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="muted">Nenhum duelo ainda. O primeiro desafio está esperando!</p>'}
+  const rows = DB.duels.map(d => { const r = decide(d); const c = carById(d.car);
+    const times = standings(d).map(x => `<span style="color:${PL(x.id).color}">${esc(pshort(x.id))}</span> ${x.run && x.run.state === 'done' ? fmt(x.run.time) + (x.run.penalty ? ` <span class="muted">(+${x.run.penalty})</span>` : '') : tmTxt(x.run)}`).join(' · ');
+    return `<tr><td class="num">${d.n}</td><td>${new Date(d.createdAt || 0).toLocaleDateString('pt-BR')}</td><td>${esc(pshort(d.challenger))}</td><td>${c.name} ${c.year}</td><td>${times}</td><td>${r ? (r.winners.length ? listJoin(r.winners.map(ptag)) : 'ninguém concluiu') : 'em andamento'}</td></tr>`; }).join('');
+  return `<div class="wrap">${logo()}<div class="card"><h2>Histórico de desafios</h2>${DB.duels.length ? `<div class="scroll"><table><thead><tr><th>Nº</th><th>Data</th><th>Lançado por</th><th>Carro</th><th>Tempos</th><th>Vencedor</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="muted">Nenhum desafio ainda. O primeiro está esperando!</p>'}
   <div class="row" style="margin-top:14px"><button class="btn alt" data-go="home">Voltar</button></div></div></div>`;
 }
 function helpView() {
@@ -1784,6 +1901,7 @@ function helpView() {
   ${k('<kbd>Shift</kbd> ou <kbd>N</kbd>', 'Nitro (recarrega devagar)')}${k('<kbd>Espaço</kbd>', 'Freio de mão (para derrapar)')}${k('<kbd>C</kbd>', 'Trocar câmera')}
   ${k('<kbd>R</kbd>', 'Voltar ao último checkpoint')}${k('<kbd>Esc</kbd>', 'Pausa')}${k('<kbd>M</kbd>', 'Liga/desliga o som')}</div>
   <h3 style="margin-top:18px">Controle de videogame</h3><p class="muted">Gatilho direito acelera, esquerdo freia, analógico esquerdo vira, A ou RB = nitro, X = freio de mão, Y = checkpoint, LB = câmera, Start = pausa.</p>
+  <h3>Desafios</h3><p class="muted">Quem lança escolhe o carro e a pista; todos os jogadores correm uma vez, com o mesmo carro, contra o ghost do melhor tempo até ali. Quem fizer o melhor tempo vence e lança o próximo. Se alguém não correr em ${ROUND_DAYS} dias, o desafio fecha sem ele.</p>
   <h3>Batidas</h3><p class="muted">Cada segundo batendo ou raspando na mureta vale 1 ponto (uma pancada rápida já conta 1). No final, cada ponto soma 1 s ao tempo. Frear antes da curva compensa!</p>
   <h3>Dicas</h3><p class="muted">Loops pedem velocidade: entre embalado. Nos saltos, chegue reto e rápido. Se cair ou capotar, o carro volta ao último checkpoint e o tempo continua correndo.</p>
   <div class="row"><button class="btn alt" data-go="home">Voltar</button></div></div></div>`;
@@ -1791,33 +1909,44 @@ function helpView() {
 function resultView() {
   const r = UI.result; if (!r) return homeView();
   return `<div class="wrap" style="max-width:720px">${logo()}<div class="card" style="text-align:center"><h2 style="font-size:44px;color:${r.color}">${r.title}</h2><p class="big">${r.line}</p><p class="muted">${r.sub || ''}</p>
-  ${r.score ? `<div class="score" style="margin:10px 0"><div><div class="n pai">${r.score.pai}</div><div class="who">Pai</div></div><div class="x">×</div><div><div class="n filho">${r.score.filho}</div><div class="who">Filho</div></div></div>` : ''}
-  <div class="row" style="justify-content:center">${r.wa ? waBtn(r.wa, r.waLabel) : ''}${r.retry ? '<button class="btn" data-go="retry">Tentar de novo (com seu ghost)</button><button class="btn alt" data-go="treino">Outra pista</button>' : ''}<button class="btn ${r.retry ? 'alt' : ''}" data-go="home">Voltar ao início</button></div></div></div>`;
+  ${r.table || ''}${r.score ? `<h3 style="margin-top:14px">Placar geral</h3>${rankHTML(r.score, true)}` : ''}
+  <div class="row" style="justify-content:center;margin-top:12px">${r.wa ? waBtn(r.wa, r.waLabel) : ''}${r.retry ? '<button class="btn" data-go="retry">Tentar de novo (com seu ghost)</button><button class="btn alt" data-go="treino">Outra pista</button>' : ''}<button class="btn ${r.retry ? 'alt' : ''}" data-go="home">Voltar ao início</button></div></div></div>`;
 }
 function bind() {
-  document.querySelectorAll('[data-setwho]').forEach(b => b.onclick = () => setWho(b.dataset.setwho));
   document.querySelectorAll('[data-car]').forEach(b => b.onclick = () => { UI.sel = b.dataset.car; render(); });
+  document.querySelectorAll('[data-color]').forEach(b => b.onclick = () => { UI.inviteName = $('#invName')?.value || ''; UI.inviteColor = b.dataset.color; render(); });
   document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
 }
 function confirmBox(mode, d) {
-  const op = WHO[other(UI.who)];
   const txt = mode === 'respond'
-    ? `Você vai responder ao desafio do ${WHO[d.challenger]}. É a sua única tentativa nesta pista: ao começar a contagem, o tempo vale para o placar, e desistir conta como não concluída.`
-    : `Isto é um desafio oficial para o ${op}, não um treino. É a sua única tentativa: ao começar a contagem, o tempo fica registrado e o ${op} vai correr contra o seu ghost. Para testar o carro, use o Treino livre.`;
-  return `<div class="confirm"><h3>${mode === 'respond' ? 'Aceitar o desafio?' : 'Valendo para o placar?'}</h3><p>${txt}</p>
+    ? `Você vai correr o desafio nº ${d.n}, lançado por ${esc(pname(d.challenger))}. É a sua única tentativa nesta pista: ao começar a contagem, o tempo vale para o placar, e desistir conta como não concluída.`
+    : `Isto é um desafio oficial para todos os jogadores, não um treino. É a sua única tentativa: ao começar a contagem, o tempo fica registrado e os outros vão correr contra o seu ghost. Para testar o carro, use o Treino livre.`;
+  return `<div class="confirm"><h3>${mode === 'respond' ? 'Valendo?' : 'Valendo para o placar?'}</h3><p>${txt}</p>
    <div class="row"><button class="btn" data-go="race">Valendo! Começar</button><button class="btn alt" data-go="noconfirm">Ainda não</button></div></div>`;
 }
 function newSeed() { return 10000 + Math.floor(Math.random() * 89999); }
+function slugId(name) { let s = name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/^vogel\s+/, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 16) || 'jogador'; let id = s, k = 2; while (DB.players.some(p => p.id === id)) id = s + k++; return id; }
 async function go(a) {
   Audio.init();
   if (a !== 'askrace' && a !== 'race') UI.confirm = false;
-  if (a === 'home') { UI.view = 'home'; UI.result = null; render(); if (!Game.attract) Game.startAttract(); return; }
+  if (a === 'home') { UI.view = 'home'; UI.result = null; UI.invited = null; render(); if (!Game.attract) Game.startAttract(); return; }
   if (a === 'history' || a === 'help') { UI.view = a; render(); return; }
+  if (a === 'invite') { UI.view = 'invite'; UI.invited = null; UI.inviteErr = ''; UI.inviteName = ''; render(); return; }
+  if (a === 'createplayer') {
+    const name = ($('#invName')?.value || '').trim().replace(/\s+/g, ' ');
+    if (name.length < 2) { UI.inviteErr = 'Escreva o nome do perfil.'; UI.inviteName = name; render(); return; }
+    if (DB.players.some(p => p.name.toLowerCase() === name.toLowerCase())) { UI.inviteErr = 'Já existe um perfil com esse nome.'; UI.inviteName = name; render(); return; }
+    const id = slugId(name), order = Math.max(0, ...DB.players.map(p => p.order || 0)) + 1;
+    try { await dbSetPlayer(id, { name, color: UI.inviteColor, order, createdBy: UI.who, createdAt: Date.now() }, false); UI.invited = id; UI.inviteErr = ''; DB.players.some(p => p.id === id) || DB.players.push({ id, name, color: UI.inviteColor, order }); }
+    catch (e) { UI.inviteErr = 'Não consegui criar o perfil (' + (e.code || e.message) + ').'; UI.inviteName = name; }
+    render(); return;
+  }
+  if (a === 'logout') { lock(UI.who); UI.splash = true; render(); toast('Este aparelho vai pedir o PIN de novo.'); return; }
   if (a === 'newduel') { UI.flow = 'duel'; UI.sel = null; UI.view = 'cars'; render(); return; }
   if (a === 'treino') { UI.flow = 'treino'; UI.sel = UI.sel || null; UI.view = 'cars'; render(); return; }
   if (a === 'pickcar' || a === 'reroll') { await ensureModel(UI.sel, 4000); UI.seed = newSeed(); UI.track = genTrack(UI.seed, UI.sel); UI.view = 'track'; showTrackPreview(); render(); return; }
-  if (a === 'respond') { await ensureModel(duelState(UI.who).duel?.car, 4000); const st = duelState(UI.who); if (st.kind !== 'respond') { render(); return; } UI.flow = 'respond'; UI.duel = st.duel; UI.sel = st.duel.car; UI.seed = st.duel.seed; UI.track = genTrack(st.duel.seed, st.duel.car); UI.view = 'track'; showTrackPreview(); render(); return; }
-  if (a === 'markdnf') { const st = duelState(UI.who); if (st.kind === 'abandoned') await finishDuelRun(st.duel, { state: 'dnf' }); render(); return; }
+  if (a === 'respond') { await ensureModel(duelState(UI.who).duel?.car, 4000); const st = duelState(UI.who); if (st.kind !== 'run') { render(); return; } UI.flow = 'respond'; UI.duel = st.duel; UI.sel = st.duel.car; UI.seed = st.duel.seed; UI.track = genTrack(st.duel.seed, st.duel.car); UI.view = 'track'; showTrackPreview(); render(); return; }
+  if (a === 'markdnf') { const st = duelState(UI.who); if (st.kind === 'abandoned') await finishRun(st.duel, { state: 'dnf', at: Date.now() }); render(); return; }
   if (a === 'askrace') { UI.confirm = true; render(); requestAnimationFrame(() => document.querySelector('.confirm')?.scrollIntoView({ block: 'center', behavior: 'smooth' })); return; }
   if (a === 'noconfirm') { UI.confirm = false; render(); return; }
   if (a === 'splash') { UI.splash = true; UI.confirm = false; render(); return; }
@@ -1825,10 +1954,11 @@ async function go(a) {
   if (a === 'retry') { const o = UI.lastTreino; if (o) { UI.activeRace = true; Game.startRace({ ...o, ghost: o.bestGhost, target: o.best, label: o.label }); } return; }
 }
 function showTrackPreview() { Game.stopAttract(); buildWorld(UI.track); const car = new Car(UI.track, carById(UI.track.carId)); car.s = 20; car.v = 22; car.updatePose(); const mesh = buildCarMesh(car.spec); scene.add(mesh); Game.attract = { tr: UI.track, car, mesh }; cam.init = false; }
+const runOf = res => ({ state: 'done', time: res.time, raw: res.raw, penalty: res.penalty, splits: res.splits, crashes: res.crashes, at: Date.now() });
 async function beginRace() {
   await ensureModel(UI.track.carId);
   const me = UI.who, tr = UI.track, car = carById(tr.carId);
-  const label = `<b class="${me}">${WHO[me]}</b><br>${car.name} ${car.year}`;
+  const label = `<b style="color:${PL(me).color}">${esc(pshort(me))}</b><br>${car.name} ${car.year}`;
   if (UI.flow === 'treino') {
     const o = { track: tr, carId: tr.carId, mode: 'treino', label: label + '<br><span class="muted">Treino</span>', onQuit: () => go('home'),
       onFinish: res => { UI.activeRace = false; const prev = UI.lastTreino && UI.lastTreino.track === tr ? UI.lastTreino : null; const better = !prev || res.time < prev.best;
@@ -1838,47 +1968,58 @@ async function beginRace() {
     UI.activeRace = true; Game.startRace(o); return;
   }
   if (UI.flow === 'duel') {
-    const st = duelState(me); if (st.kind !== 'new' || !st.mine) { toast('O estado do duelo mudou. Confira a tela inicial.'); go('home'); return; }
+    const st = duelState(me); if (st.kind !== 'new' || !st.mine) { toast('O estado do desafio mudou. Confira a tela inicial.'); go('home'); return; }
     const id = `d${st.n}_${tr.seed}`;
-    const base = { n: st.n, seed: tr.seed, car: tr.carId, challenger: me, createdAt: Date.now(), [me]: { state: 'started' } };
+    const base = { n: st.n, seed: tr.seed, car: tr.carId, challenger: me, createdAt: Date.now(), players: DB.players.map(p => p.id), [me]: { state: 'started' } };
     UI.activeRace = true;
     Game.startRace({ track: tr, carId: tr.carId, mode: 'duel', label: label + `<br><span class="muted">Desafio nº ${st.n}</span>`,
       onStart: () => dbSetDuel(id, base, false).catch(e => toast('Erro ao registrar o desafio: ' + (e.code || e.message))),
-      onQuit: async () => { UI.activeRace = false; await finishDuelRun({ id, ...base }, { state: 'dnf' }); UI.result = { title: 'DESISTÊNCIA', color: '#ff2a6d', line: 'A corrida conta como não concluída.', sub: `Agora o ${WHO[other(me)]} só precisa chegar para vencer.`, wa: waChallenge({ id, ...base }, { state: 'dnf' }), waLabel: `Avisar o ${FULL[other(me)]} no WhatsApp` }; UI.view = 'result'; render(); Game.startAttract(); },
-      onFinish: async res => { UI.activeRace = false; await finishDuelRun({ id, ...base }, { state: 'done', time: res.time, raw: res.raw, penalty: res.penalty, splits: res.splits, crashes: res.crashes }, res.ghost);
-        UI.result = { title: 'TEMPO REGISTRADO', color: '#ff7a1a', line: fmt(res.time), sub: penLine(res) + ` · Agora é a vez do ${WHO[other(me)]} tentar bater esse tempo no mesmo carro e pista.`, wa: waChallenge({ id, ...base }, { state: 'done', time: res.time, penalty: res.penalty }), waLabel: `Avisar o ${FULL[other(me)]} no WhatsApp` }; UI.view = 'result'; render(); Game.startAttract(); } });
+      onQuit: async () => { UI.activeRace = false; showRunResult(await finishRun({ id, ...base }, { state: 'dnf', at: Date.now() }), me, null); },
+      onFinish: async res => { UI.activeRace = false; showRunResult(await finishRun({ id, ...base }, runOf(res), res.ghost), me, res); } });
     return;
   }
   if (UI.flow === 'respond') {
-    const d = UI.duel, ch = d.challenger, cs = d[ch] || {};
-    let ghost = null; const gb = cs.state === 'done' ? await dbGetGhost(d.id + '_' + ch) : null; if (gb) try { ghost = decodeGhost(gb); } catch {}
+    const d = UI.duel, b = leader(d, me);
+    let ghost = null; const gb = b ? await dbGetGhost(d.id + '_' + b.id) : null; if (gb) try { ghost = decodeGhost(gb); } catch {}
     UI.activeRace = true;
-    Game.startRace({ track: tr, carId: tr.carId, mode: 'duel', ghost, ghostSplits: cs.splits || null, target: cs.state === 'done' ? cs.time : null,
-      label: label + `<br><span class="muted">Desafio nº ${d.n} · ghost do ${WHO[ch]}</span>`,
+    Game.startRace({ track: tr, carId: tr.carId, mode: 'duel', ghost, ghostSplits: b ? b.run.splits || null : null, target: b ? b.run.time : null,
+      label: label + `<br><span class="muted">Desafio nº ${d.n}${b ? ' · ghost: ' + esc(pshort(b.id)) : ''}</span>`,
       onStart: () => dbSetDuel(d.id, { [me]: { state: 'started' } }, true).catch(e => toast('Erro ao registrar: ' + (e.code || e.message))),
-      onQuit: async () => { UI.activeRace = false; const fin = await finishDuelRun(d, { state: 'dnf' }); showDuelResult(fin, me); },
-      onFinish: async res => { UI.activeRace = false; const fin = await finishDuelRun(d, { state: 'done', time: res.time, raw: res.raw, penalty: res.penalty, splits: res.splits, crashes: res.crashes }, res.ghost); showDuelResult(fin, me); } });
+      onQuit: async () => { UI.activeRace = false; showRunResult(await finishRun(d, { state: 'dnf', at: Date.now() }), me, null); },
+      onFinish: async res => { UI.activeRace = false; showRunResult(await finishRun(d, runOf(res), res.ghost), me, res); } });
   }
 }
-async function finishDuelRun(d, run, ghost) {
+async function finishRun(d, run, ghost) {
   const me = UI.who;
+  // usa o estado mais novo do desafio (outros podem ter corrido enquanto isso)
+  const fresh = DB.duels.find(x => x.id === d.id) || d;
+  const merged = deepMerge(fresh, { [me]: run });
   try {
     if (ghost) await dbSetGhost(d.id + '_' + me, ghost).catch(() => {});
-    const merged = deepMerge(d, { [me]: run }); const w = decide(merged);
-    const upd = { [me]: run }; if (w) upd.winner = w;
+    const upd = { [me]: run }, res = decide({ ...merged, winners: undefined, winner: undefined });
+    if (res) { upd.winner = res.next; upd.winners = res.winners; merged.winner = res.next; merged.winners = res.winners; }
     await dbSetDuel(d.id, upd, true);
-    return { ...merged, winner: w };
-  } catch (e) { toast('Não consegui salvar o resultado: ' + (e.code || e.message), 6000); return deepMerge(d, { [me]: run }); }
+  } catch (e) { toast('Não consegui salvar o resultado: ' + (e.code || e.message), 6000); }
+  return merged;
 }
 function penLine(res) { return res.penalty ? `${fmt(res.raw)} na pista + ${res.penalty} s de batidas` : 'Sem batidas — volta limpa!'; }
-function showDuelResult(d, me) {
-  const w = d.winner, op = other(me), sc = scoreboard();
-  if (w && !DB.duels.find(x => x.id === d.id && x.winner)) sc[w]++; // o snapshot pode chegar depois
-  const tm = x => !x ? '—' : x.state === 'dnf' ? 'não concluiu' : fmt(x.time) + (x.penalty ? ` (${x.penalty} bat.)` : '');
-  const diff = d.pai?.state === 'done' && d.filho?.state === 'done' ? Math.abs(d.pai.time - d.filho.time).toFixed(2) + ' s de diferença' : '';
-  UI.result = { title: w === 'empate' ? 'EMPATE!' : w === me ? 'VOCÊ VENCEU!' : 'DERROTA', color: w === 'empate' ? '#ffd23f' : w === me ? '#3dff9a' : '#ff2a6d',
-    line: `Pai ${tm(d.pai)} × Filho ${tm(d.filho)}`, sub: diff + (w === me ? '' : w === 'empate' ? '' : ` · Ponto para o ${WHO[op]}.`) + ` Próximo desafio: o ${WHO[me]} escolhe o carro.`, score: sc,
-    wa: w ? waResult(d, sc) : null, waLabel: `Contar o resultado ao ${FULL[op]} no WhatsApp` };
+function showRunResult(d, me, res) {
+  const r = decide(d), sc = scoreboard();
+  if (r && !DB.duels.find(x => x.id === d.id && decide(x))) for (const w of r.winners) { sc[w] = sc[w] || { wins: 0, played: 0 }; sc[w].wins++; } // o banco pode responder depois
+  const mine = d[me] || {}, pos = placeOf(d, me);
+  if (r) {
+    const won = r.winners.includes(me);
+    UI.result = { title: won ? (r.winners.length > 1 ? 'EMPATE NA PONTA!' : 'VOCÊ VENCEU!') : 'FIM DO DESAFIO', color: won ? '#3dff9a' : '#ff2a6d',
+      line: mine.state === 'done' ? 'Seu tempo: ' + fmt(mine.time) : 'Corrida não concluída',
+      sub: (res ? penLine(res) + ' · ' : '') + (r.winners.length > 1 ? `Empate na ponta: ${listJoin(r.winners.map(pname))}. ` : r.winners.length ? `Vencedor: ${pname(r.winners[0])}. ` : 'Ninguém concluiu. ') + `Próximo desafio é do ${pname(r.next)}.`,
+      table: standingsHTML(d), score: sc, wa: waResult(d, r), waLabel: 'Contar o resultado no WhatsApp' };
+  } else {
+    const pend = partsOf(d).filter(id => !finished(d[id]));
+    UI.result = { title: mine.state === 'done' ? 'TEMPO REGISTRADO' : 'DESISTÊNCIA', color: mine.state === 'done' ? '#ff7a1a' : '#ff2a6d',
+      line: mine.state === 'done' ? fmt(mine.time) : 'A corrida conta como não concluída.',
+      sub: (res ? penLine(res) + ' · ' : '') + (mine.state === 'done' ? `Por enquanto você está em ${pos}º. ` : '') + `Faltam correr: ${listJoin(pend.map(pname))}.`,
+      table: standingsHTML(d), wa: waChallenge(d), waLabel: 'Avisar no WhatsApp' };
+  }
   UI.view = 'result'; render(); Game.startAttract();
 }
 

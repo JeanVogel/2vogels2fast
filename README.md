@@ -1,8 +1,8 @@
 # 2 Vogels 2 Fast · Bloodline Racing
 
 Jogo de corrida no navegador, Pai × Filho, inspirado no Stunts (1990).
-Duelos contra o relógio, um de cada vez, cada um no seu computador: quem desafia escolhe o carro e a pista,
-o outro corre contra o ghost. Placar de vitórias, derrotas e empates.
+Desafios contra o relógio, cada um no seu computador: quem lança escolhe o carro e a pista, todos os jogadores
+correm uma vez contra o ghost do melhor tempo, e quem vencer lança o próximo. Cada perfil entra com um PIN de 4 dígitos.
 
 - `index.html`: o jogo inteiro (three.js carregado do jsDelivr).
 - `c4vts.json`, `rsq3.json`: modelos 3D do C4 VTR e da RS Q3.

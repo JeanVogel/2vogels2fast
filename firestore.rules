@@ -1,8 +1,22 @@
 rules_version = '2';
-// Regras do placar do 2 Vogels 2 Fast: só as coleções do jogo; nada pode ser apagado,
-// e um duelo não pode ter o carro, a pista ou o número trocados depois de criado.
+// Regras do placar do 2 Vogels 2 Fast.
+// - players: perfis (nome, cor, ordem). O PIN só pode ser gravado uma vez; trocar ou apagar, só pelo console.
+// - duels: cada desafio (rodada). Nada pode ser apagado, e número, pista, carro, quem lançou e a lista
+//   de participantes não mudam depois de criados.
+// - ghosts: a volta gravada de cada jogador; só pode ser criada.
 service cloud.firestore {
   match /databases/{database}/documents {
+    match /players/{id} {
+      allow read: if true;
+      allow create: if request.resource.data.name is string
+                    && request.resource.data.name.size() >= 2 && request.resource.data.name.size() <= 24
+                    && request.resource.data.color is string && request.resource.data.order is int
+                    && !('pin' in request.resource.data);
+      allow update: if !('pin' in resource.data)
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pin'])
+                    && request.resource.data.pin is string;
+      allow delete: if false;
+    }
     match /duels/{id} {
       allow read: if true;
       allow create: if request.resource.data.keys().hasAll(['n', 'seed', 'car', 'challenger'])
@@ -10,7 +24,8 @@ service cloud.firestore {
       allow update: if request.resource.data.n == resource.data.n
                     && request.resource.data.seed == resource.data.seed
                     && request.resource.data.car == resource.data.car
-                    && request.resource.data.challenger == resource.data.challenger;
+                    && request.resource.data.challenger == resource.data.challenger
+                    && request.resource.data.get('players', null) == resource.data.get('players', null);
       allow delete: if false;
     }
     match /ghosts/{id} {
