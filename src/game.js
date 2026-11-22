@@ -12,17 +12,22 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const THEME_NAME = { campo: 'Campo clássico', deserto: 'Deserto ao pôr do sol', cidade: 'Cidade à noite' };
 const GLOW = { escort: '#20e0ff', corsa: '#a64dff', p206: '#3d7bff', golf: '#39ff88', p307: '#ff8a1f', p308: '#3d7bff', megane: '#b04dff', rsq3: '#7fd4ff', c4r: '#ff2a6d', c4b: '#39ff88' };
 
+// ---------- aparelho ----------
+// celular/tablet: controles na tela e gráficos mais leves
+const TOUCH = matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window && navigator.maxTouchPoints > 0);
+const DETAIL = TOUCH ? 0.5 : 1;
+if (TOUCH) document.body.classList.add('touch');
 // ---------- renderer ----------
 const canvas = $('#gl');
 let renderer;
 try {
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: !TOUCH, powerPreference: 'high-performance' });
 } catch (e) {
   $('#screen').innerHTML = '<div class="card"><h2>WebGL indisponível</h2><p>Este navegador não conseguiu iniciar os gráficos 3D. Tente o Chrome ou o Edge atualizados.</p></div>';
   throw e;
 }
-renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, TOUCH ? 1.3 : 1.75));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = TOUCH ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, 1, 0.3, 9000);
@@ -374,7 +379,7 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(5000, 32, 16), new THREE.Sha
 sky.renderOrder = -1; scene.add(sky);
 const hemi = new THREE.HemisphereLight('#fff', '#444', 1); scene.add(hemi);
 const sun = new THREE.DirectionalLight('#fff', 2); sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 1, far: 400 }); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
+sun.shadow.mapSize.set(TOUCH ? 1024 : 2048, TOUCH ? 1024 : 2048); Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 1, far: 400 }); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
 scene.add(sun); scene.add(sun.target);
 const headlight = new THREE.SpotLight('#fff3d6', 0, 120, 0.55, 0.5, 1.2); scene.add(headlight); scene.add(headlight.target);
 
@@ -508,7 +513,7 @@ function gantry(tr, s0, label, C) {
   return g;
 }
 function scatter(tr, group, C, R, area) {
-  const place = (count, minD, cb) => { let k = 0, tries = 0; while (k < count && tries++ < count * 12) { const x = area.cx + (R() * 2 - 1) * area.ext, z = area.cz + (R() * 2 - 1) * area.ext; const d = tr.distTo(x, z); if (d < minD) continue; cb(x, z, d, k++); } };
+  const place = (count, minD, cb) => { count = Math.max(1, Math.round(count * DETAIL)); let k = 0, tries = 0; while (k < count && tries++ < count * 12) { const x = area.cx + (R() * 2 - 1) * area.ext, z = area.cz + (R() * 2 - 1) * area.ext; const d = tr.distTo(x, z); if (d < minD) continue; cb(x, z, d, k++); } };
   const inst = (geo, mat, list, shadow = true) => { if (!list.length) return; const im = new THREE.InstancedMesh(geo, mat, list.length); const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0);
     list.forEach(([x, z, s, rot, sy], k) => { q.setFromAxisAngle(Y, rot); m4.compose(new THREE.Vector3(x, GROUND, z), q, new THREE.Vector3(s, s * (sy || 1), s)); im.setMatrixAt(k, m4); }); im.castShadow = shadow; im.receiveShadow = true; group.add(im); };
   const vc = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, flatShading: true });
@@ -759,10 +764,49 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => { keys.clear(); if (Game.race && Game.race.state === 'race' && !Game.paused) Game.togglePause(); });
+// toque: botões na tela (vários dedos ao mesmo tempo) ou direção inclinando o aparelho
+const TK = { left: 0, right: 0, gas: 0, brake: 0, nitro: 0, hand: 0 };
+const tilt = { on: store.get('vr_tilt', false), v: 0, ok: false };
+let lastDev = TOUCH ? 'toque' : 'teclado';
+function initTouch() {
+  const tc = $('#tc'); if (!tc) return;
+  tc.querySelectorAll('[data-k]').forEach(b => {
+    const k = b.dataset.k;
+    const on = e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch {} TK[k] = 1; b.classList.add('on'); lastDev = 'toque'; Audio.init(); };
+    const off = e => { e.preventDefault(); TK[k] = 0; b.classList.remove('on'); };
+    b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('lostpointercapture', off);
+    b.addEventListener('contextmenu', e => e.preventDefault());
+  });
+  tc.querySelectorAll('[data-a]').forEach(b => b.addEventListener('pointerdown', e => { e.preventDefault(); const a = b.dataset.a, r = Game.race; if (!r) return;
+    if (a === 'pause') Game.togglePause(); if (a === 'cam') { Game.camMode = (Game.camMode + 1) % 3; }
+    if (a === 'reset' && r.state === 'race' && r.car.mode !== 'crash') r.car.respawn(); }));
+  setTilt(tilt.on, true);
+}
+function onTilt(e) {
+  if (e.beta == null) return; tilt.ok = true;
+  const ang = (screen.orientation && screen.orientation.angle) ?? window.orientation ?? 0;
+  // deitado: virar o aparelho como um volante muda o beta; em pé, o gamma
+  const raw = ang === 90 ? e.beta : (ang === -90 || ang === 270) ? -e.beta : -e.gamma;
+  tilt.v = Math.max(-1, Math.min(1, -raw / 22));
+}
+async function setTilt(on, silent) {
+  if (on && typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission) {
+    try { if (await DeviceOrientationEvent.requestPermission() !== 'granted') on = false; } catch { on = false; }
+  }
+  tilt.on = on; store.set('vr_tilt', on); document.body.classList.toggle('tilt', on);
+  removeEventListener('deviceorientation', onTilt); if (on) addEventListener('deviceorientation', onTilt);
+  if (!silent) toast(on ? 'Direção: incline o celular como um volante' : 'Direção: botões ◀ ▶', 2200);
+}
+// tela cheia e paisagem ao começar a corrida no celular (onde o navegador deixa)
+function goFullscreen() {
+  if (!TOUCH) return; const el = document.documentElement;
+  try { const p = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : el.webkitRequestFullscreen?.(); Promise.resolve(p).then(() => screen.orientation?.lock?.('landscape')).catch(() => {}); } catch {}
+}
 let steerSmooth = 0, padPrev = {};
 function readInput(dt) {
   if (window.__vr && window.__vr.autodrive && Game.race) return autopilot(Game.race.car);
   const k = c => keys.has(c);
+  if (!TOUCH && keys.size) lastDev = 'teclado';
   let throttle = (k('ArrowUp') || k('KeyW')) ? 1 : 0, brake = (k('ArrowDown') || k('KeyS')) ? 1 : 0;
   let target = ((k('ArrowLeft') || k('KeyA')) ? 1 : 0) - ((k('ArrowRight') || k('KeyD')) ? 1 : 0);
   let nitro = k('ShiftLeft') || k('ShiftRight') || k('KeyN'), handbrake = k('Space');
@@ -770,7 +814,7 @@ function readInput(dt) {
   try {
     for (const gp of navigator.getGamepads ? navigator.getGamepads() : []) {
       if (!gp) continue; const ax = gp.axes[0] || 0, bt = i => gp.buttons[i] ? gp.buttons[i].value || (gp.buttons[i].pressed ? 1 : 0) : 0;
-      if (Math.abs(ax) > 0.12) analog = -ax;
+      if (Math.abs(ax) > 0.12) { analog = -ax; lastDev = 'controle'; }
       throttle = Math.max(throttle, bt(7)); brake = Math.max(brake, bt(6));
       if (bt(0) > 0.5 || bt(5) > 0.5) nitro = true; if (bt(2) > 0.5) handbrake = true;
       const edge = (i, fn) => { const p = bt(i) > 0.5; if (p && !padPrev[i]) fn(); padPrev[i] = p; };
@@ -778,6 +822,11 @@ function readInput(dt) {
       edge(9, () => Game.race && Game.togglePause()); edge(4, () => { if (Game.race) Game.camMode = (Game.camMode + 1) % 3; });
     }
   } catch {}
+  if (TK.gas || TK.brake || TK.left || TK.right || TK.nitro || TK.hand) {
+    throttle = Math.max(throttle, TK.gas); brake = Math.max(brake, TK.brake); if (TK.nitro) nitro = true; if (TK.hand) handbrake = true;
+    if (!tilt.on) target = TK.left - TK.right;
+  }
+  if (tilt.on && tilt.ok && Game.race) analog = Math.abs(tilt.v) < 0.04 ? 0 : tilt.v;
   if (analog != null) steerSmooth = analog;
   else { const rate = target === 0 ? 7 : (Math.sign(target) !== Math.sign(steerSmooth) ? 9 : 4.5); steerSmooth += (target - steerSmooth) * Math.min(1, rate * dt); if (Math.abs(steerSmooth) < 0.01 && !target) steerSmooth = 0; }
   return { throttle, brake, steer: steerSmooth, nitro, handbrake };
@@ -845,14 +894,15 @@ const Game = {
     let gmesh = null; if (opts.ghost) { gmesh = buildCarMesh(car.spec, true); scene.add(gmesh); }
     this.race = { opts, tr, car, mesh, gmesh, t: 0, state: 'countdown', cd: 3.6, rec: [], recT: 0, splits: [], acc: 0, lastBeep: 4, airStart: 0 };
     this.paused = false; cam.init = false; this.camMode = store.get('vr_cam', 0);
-    $('#screen').classList.add('hidden'); $('#hud').classList.remove('hidden'); $('#pause').classList.remove('on');
+    $('#screen').classList.add('hidden'); $('#hud').classList.remove('hidden'); $('#pause').classList.remove('on'); document.body.classList.add('racing');
+    for (const k in TK) TK[k] = 0; document.querySelectorAll('#tc .on').forEach(b => b.classList.remove('on'));
     $('#hWho').innerHTML = opts.label || ''; $('#hTarget').textContent = opts.target ? 'Tempo a bater: ' + fmt(opts.target) + ' (com batidas)' : '';
     $('#hDelta').textContent = ''; const hh0 = $('#hHits'); hh0.dataset.n = ''; 
     renderer.domElement.focus?.();
   },
   endRace() {
     const r = this.race; if (!r) return; scene.remove(r.mesh); if (r.gmesh) scene.remove(r.gmesh); store.set('vr_cam', this.camMode);
-    this.race = null; this.paused = false; UI.activeRace = false; Audio.engine(null, false); $('#hud').classList.add('hidden'); hudMsg('');
+    this.race = null; this.paused = false; UI.activeRace = false; Audio.engine(null, false); $('#hud').classList.add('hidden'); hudMsg(''); document.body.classList.remove('racing');
   },
   togglePause() {
     const r = this.race; if (!r || r.state === 'done') return;
@@ -862,6 +912,7 @@ const Game = {
       const duel = r.opts.mode === 'duel';
       $('#pauseInfo').textContent = duel ? 'O cronômetro está parado. Se desistir, a corrida conta como não concluída.' : 'Treino livre — nada é registrado.';
       $('#pauseBtns').innerHTML = `<button class="btn" id="pResume">Continuar</button>${duel ? '<button class="btn alt" id="pQuit">Desistir</button>' : '<button class="btn alt" id="pRetry">Recomeçar</button><button class="btn alt" id="pQuit">Sair</button>'}`;
+      if (TOUCH) { $('#pauseBtns').insertAdjacentHTML('beforeend', `<button class="btn alt" id="pTilt">Direção: ${tilt.on ? 'inclinar' : 'botões'}</button>`); $('#pTilt').onclick = async () => { await setTilt(!tilt.on); $('#pTilt').textContent = 'Direção: ' + (tilt.on ? 'inclinar' : 'botões'); }; }
       $('#pResume').onclick = () => this.togglePause();
       $('#pQuit').onclick = () => { const o = r.opts; this.endRace(); o.onQuit && o.onQuit(); };
       const rt = $('#pRetry'); if (rt) rt.onclick = () => { const o = r.opts; this.endRace(); this.startRace(o); };
@@ -1153,7 +1204,7 @@ function rankHTML(sc, big) {
   return `<div class="rank">${list.map(x => `<div class="rk"><span class="pos">${1 + list.filter(y => y.s.wins > x.s.wins).length}º</span><b style="color:${x.p.color}">${esc(x.p.name)}</b><span class="w">${x.s.wins} vitória${x.s.wins === 1 ? '' : 's'}</span><span class="muted">${x.s.played} desafio${x.s.played === 1 ? '' : 's'}</span></div>`).join('')}</div>`;
 }
 function standingsHTML(d) {
-  return `<div class="rank">${standings(d).map(x => `<div class="rk"><span class="pos">${placeOf(d, x.id) ? placeOf(d, x.id) + 'º' : '–'}</span><b style="color:${PL(x.id).color}">${esc(pname(x.id))}</b><span class="w">${tmTxt(x.run)}</span><span class="muted">${x.run && x.run.penalty ? x.run.penalty + ' s de batidas' : ''}</span></div>`).join('')}</div>`;
+  return `<div class="rank">${standings(d).map(x => `<div class="rk"><span class="pos">${placeOf(d, x.id) ? placeOf(d, x.id) + 'º' : '–'}</span><b style="color:${PL(x.id).color}">${esc(pname(x.id))}</b><span class="w">${tmTxt(x.run)}${devTag(x.run)}</span><span class="muted">${x.run && x.run.penalty ? x.run.penalty + ' s de batidas' : ''}</span></div>`).join('')}</div>`;
 }
 function homeView() {
   const sc = scoreboard(), me = UI.who;
@@ -1234,7 +1285,8 @@ function helpView() {
   ${k('<kbd>↑</kbd> ou <kbd>W</kbd>', 'Acelerar')}${k('<kbd>↓</kbd> ou <kbd>S</kbd>', 'Frear / ré')}${k('<kbd>←</kbd> <kbd>→</kbd> ou <kbd>A</kbd> <kbd>D</kbd>', 'Virar')}
   ${k('<kbd>Shift</kbd> ou <kbd>N</kbd>', 'Nitro (recarrega devagar)')}${k('<kbd>Espaço</kbd>', 'Freio de mão (para derrapar)')}${k('<kbd>C</kbd>', 'Trocar câmera')}
   ${k('<kbd>R</kbd>', 'Voltar ao último checkpoint')}${k('<kbd>Esc</kbd>', 'Pausa')}${k('<kbd>M</kbd>', 'Liga/desliga o som')}</div>
-  <h3 style="margin-top:18px">Controle de videogame</h3><p class="muted">Gatilho direito acelera, esquerdo freia, analógico esquerdo vira, A ou RB = nitro, X = freio de mão, Y = checkpoint, LB = câmera, Start = pausa.</p>
+  <h3 style="margin-top:18px">No celular</h3><p class="muted">Deite o celular. ◀ ▶ à esquerda para virar; à direita, acelerar, frear (e ré), NOS e freio de mão. No alto: câmera, checkpoint e pausa. Na pausa dá para trocar a direção para "inclinar", virando o celular como um volante. Um controle Bluetooth também funciona. No histórico, 📱 ⌨️ 🎮 mostram com o que cada um correu.</p>
+  <h3>Controle de videogame</h3><p class="muted">Gatilho direito acelera, esquerdo freia, analógico esquerdo vira, A ou RB = nitro, X = freio de mão, Y = checkpoint, LB = câmera, Start = pausa.</p>
   <h3>Desafios</h3><p class="muted">Quem lança escolhe o carro e a pista; todos os jogadores correm uma vez, com o mesmo carro, contra o ghost do melhor tempo até ali. Quem fizer o melhor tempo vence e lança o próximo. Se alguém não correr em ${ROUND_DAYS} dias, o desafio fecha sem ele.</p>
   <h3>Batidas</h3><p class="muted">Cada segundo batendo ou raspando na mureta vale 1 ponto (uma pancada rápida já conta 1). No final, cada ponto soma 1 s ao tempo. Frear antes da curva compensa!</p>
   <h3>Dicas</h3><p class="muted">Loops pedem velocidade: entre embalado. Nos saltos, chegue reto e rápido. Se cair ou capotar, o carro volta ao último checkpoint e o tempo continua correndo.</p>
@@ -1284,11 +1336,13 @@ async function go(a) {
   if (a === 'askrace') { UI.confirm = true; render(); requestAnimationFrame(() => document.querySelector('.confirm')?.scrollIntoView({ block: 'center', behavior: 'smooth' })); return; }
   if (a === 'noconfirm') { UI.confirm = false; render(); return; }
   if (a === 'splash') { UI.splash = true; UI.confirm = false; render(); return; }
-  if (a === 'race') { UI.confirm = false; return beginRace(); }
+  if (a === 'race') { UI.confirm = false; goFullscreen(); return beginRace(); }
   if (a === 'retry') { const o = UI.lastTreino; if (o) { UI.activeRace = true; Game.startRace({ ...o, ghost: o.bestGhost, target: o.best, label: o.label }); } return; }
 }
 function showTrackPreview() { Game.stopAttract(); buildWorld(UI.track); const car = new Car(UI.track, carById(UI.track.carId)); car.s = 20; car.v = 22; car.updatePose(); const mesh = buildCarMesh(car.spec); scene.add(mesh); Game.attract = { tr: UI.track, car, mesh }; cam.init = false; }
-const runOf = res => ({ state: 'done', time: res.time, raw: res.raw, penalty: res.penalty, splits: res.splits, crashes: res.crashes, at: Date.now() });
+const runOf = res => ({ state: 'done', time: res.time, raw: res.raw, penalty: res.penalty, splits: res.splits, crashes: res.crashes, at: Date.now(), dev: lastDev });
+const DEV_ICON = { toque: '📱', teclado: '⌨️', controle: '🎮' };
+const devTag = r => r && r.dev ? ` <span title="${r.dev}">${DEV_ICON[r.dev] || ''}</span>` : '';
 async function beginRace() {
   await ensureModel(UI.track.carId);
   const me = UI.who, tr = UI.track, car = carById(tr.carId);
@@ -1358,6 +1412,7 @@ function showRunResult(d, me, res) {
 }
 
 // ---------- início ----------
+if (TOUCH) addEventListener('resize', () => { const r = Game.race; if (r && innerHeight > innerWidth && r.state === 'race' && !Game.paused) Game.togglePause(); });
 let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { hiddenAt = Date.now(); return; }
@@ -1366,6 +1421,7 @@ document.addEventListener('visibilitychange', () => {
 addEventListener('pageshow', e => { if (e.persisted && !Game.race && !UI.activeRace) { UI.splash = true; UI.view = 'home'; render(); } });
 for (const f of new Set(Object.values(REAL_FILE))) loadReal(f);
 window.__vr = { Game, UI, camera, THREE, genTrack, showTrackPreview: () => showTrackPreview(), render: () => render(), renderer, buildCarMesh, carById, ensureModel, CARS, env: () => envTex, decide, standings, scoreboard, DB };
+initTouch();
 Game.startAttract();
 requestAnimationFrame(frame);
 render();
