@@ -1632,9 +1632,12 @@ async function firebaseDB(cfg) {
   const { initializeApp } = await import(base + 'firebase-app.js');
   const F = await import(base + 'firebase-firestore.js');
   const fs = F.getFirestore(initializeApp(cfg));
-  const doc = p => { const r = F.doc(fs, p); return { set: d => F.setDoc(r, d), update: d => F.updateDoc(r, d), get: async () => { const s = await F.getDoc(r); return { exists: s.exists(), data: () => s.data() }; } }; };
+  // o Firestore não aceita lista dentro de lista (as parciais são [[distância, tempo], ...]): vão como texto JSON
+  const enc = v => Array.isArray(v) ? (v.some(Array.isArray) ? { __json: JSON.stringify(v) } : v.map(enc)) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, enc(x)])) : v;
+  const dec = v => Array.isArray(v) ? v.map(dec) : v && typeof v === 'object' ? ('__json' in v ? JSON.parse(v.__json) : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, dec(x)]))) : v;
+  const doc = p => { const r = F.doc(fs, p); return { set: d => F.setDoc(r, enc(d)), update: d => F.updateDoc(r, enc(d)), get: async () => { const s = await F.getDoc(r); return { exists: s.exists(), data: () => dec(s.data()) }; } }; };
   const collection = name => ({ orderBy: (f, dir) => ({ limit: n => ({ onSnapshot: (cb, err) => F.onSnapshot(F.query(F.collection(fs, name), F.orderBy(f, dir), F.limit(n)), { includeMetadataChanges: true },
-    s => cb({ docs: s.docs.map(d => ({ id: d.id, data: () => d.data() })), metadata: { fromCache: s.metadata.fromCache } }), err) }) }) });
+    s => cb({ docs: s.docs.map(d => ({ id: d.id, data: () => dec(d.data()) })), metadata: { fromCache: s.metadata.fromCache } }), err) }) }) });
   return { doc, collection };
 }
 async function initDB() {
