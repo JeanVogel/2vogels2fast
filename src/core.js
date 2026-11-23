@@ -54,6 +54,29 @@ export const V = { add, sub, mul, dot, cross, len, norm, lerp3 };
 
 // ---------- gerador de pistas ----------
 export const THEMES = ['campo', 'deserto', 'cidade'];
+// clima: sorteado junto com a pista (mesma semente = mesmo clima). grip = aderência, brake = freio, len = comprimento da pista
+export const WEATHERS = {
+  sol: { name: 'Tempo bom', icon: '☀️', grip: 1, brake: 1, len: 1 },
+  neblina: { name: 'Neblina', icon: '🌫️', grip: 1, brake: 1, len: 1 },
+  noite: { name: 'Noite', icon: '🌙', grip: 1, brake: 1, len: 1 },
+  chuva: { name: 'Chuva', icon: '🌧️', grip: 0.8, brake: 0.8, len: 0.92 },
+  neve: { name: 'Neve', icon: '❄️', grip: 0.62, brake: 0.62, len: 0.84 },
+  virada: { name: 'Virada do dia', icon: '🌅', grip: 1, brake: 1, len: 1 },
+};
+const WX_WEIGHTS = {
+  campo: { sol: 30, neblina: 14, noite: 14, chuva: 16, neve: 12, virada: 14 },
+  deserto: { sol: 40, neblina: 12, noite: 18, chuva: 10, virada: 20 },
+  cidade: { sol: 45, neblina: 20, chuva: 25, neve: 10 },
+};
+export function pickWeather(seed, theme) {
+  const R = rng(seed * 104729 + 11); R(); const w = WX_WEIGHTS[theme] || { sol: 1 };
+  let x = R() * Object.values(w).reduce((a, b) => a + b, 0);
+  for (const [k, v] of Object.entries(w)) { if ((x -= v) < 0) return k; }
+  return 'sol';
+}
+export function themeOf(seed) { return THEMES[Math.floor(rng(seed * 7919 + 13)() * THEMES.length)]; } // = sorteio do genTrack
+export function weatherName(wx, theme) { wx = wx || 'sol'; if (wx === 'sol' && theme === 'cidade') return 'Noite limpa'; if (wx === 'sol' && theme === 'deserto') return 'Pôr do sol'; return (WEATHERS[wx] || WEATHERS.sol).name; }
+export function weatherIcon(wx, theme) { wx = wx || 'sol'; if (wx === 'sol' && theme === 'cidade') return '🌃'; if (wx === 'sol' && theme === 'deserto') return '🌇'; return (WEATHERS[wx] || WEATHERS.sol).icon; }
 export const FLAG_GAP = 1, FLAG_LOOP = 2, FLAG_RAMP = 4, FLAG_BRIDGE = 8;
 
 function eulerFrame(yaw, pitch, bank) {
@@ -100,13 +123,15 @@ const P = {
 export function targetLength(car) { return Math.round(120 * avgSpeed(car)); }
 export function avgSpeed(car) { return 13.5 + 0.318 * car.vmax; } // calibrado com piloto automático
 
-export function genTrack(seed, carId) {
+export function genTrack(seed, carId, wxIn) {
   const car = carById(carId);
   const R = rng(seed * 7919 + 13);
   const pick = arr => arr[Math.floor(R() * arr.length)];
   const range = (a, b) => a + (b - a) * R();
-  const target = targetLength(car);
+  let target = targetLength(car);
   const theme = THEMES[Math.floor(R() * THEMES.length)];
+  const wx = WEATHERS[wxIn] ? wxIn : pickWeather(seed, theme);
+  target = Math.round(target * WEATHERS[wx].len);
 
   // estado da tartaruga
   const st = { x: 0, y: 0.0, z: 0, yaw: R() * Math.PI * 2, pitch: 0 };
@@ -205,7 +230,7 @@ export function genTrack(seed, carId) {
   if (st.y !== 0) { /* corrige drift residual */ }
   commit('finish', simulate(P.straight(80)));
 
-  return buildTrack({ seed, carId, theme, pts, yaws, pitches, banks, flags, pieces });
+  return buildTrack({ seed, carId, theme, wx, pts, yaws, pitches, banks, flags, pieces });
 }
 
 function buildTrack(t) {
@@ -233,7 +258,7 @@ function buildTrack(t) {
   cps.unshift(12);
   const features = { loops: 0, jumps: 0, hairpins: 0 };
   for (const pc of t.pieces) { if (pc.kind === 'loop') features.loops++; if (pc.kind === 'jump') features.jumps++; if (pc.kind === 'hairpin') features.hairpins++; }
-  const track = { seed: t.seed, carId: t.carId, theme: t.theme, n, length: n - 1, P, T, U, R: Rr, KN, KG, FL,
+  const track = { seed: t.seed, carId: t.carId, theme: t.theme, wx: t.wx, wgrip: WEATHERS[t.wx].grip, wbrake: WEATHERS[t.wx].brake, n, length: n - 1, P, T, U, R: Rr, KN, KG, FL,
     start: 15, finish: n - 40, checkpoints: cps, pieces: t.pieces.map(p => ({ start: p.start, kind: p.kind })), features };
   // grade espacial para consultas de distância (cenário)
   const CELL = 20, grid = new Map();
@@ -331,7 +356,7 @@ export class Car {
     const vmax = sp.vmax * (nitroOn ? 1.15 : 1);
     let a = 0; const v = this.v;
     if (inp.throttle > 0 && v > -0.5) a += sp.acc * (nitroOn ? 1.6 : 1) * Math.max(0, 1 - (v / vmax) ** 2) * inp.throttle;
-    if (inp.brake > 0) { if (v > 0.5) a -= 22 * inp.brake; else if (v > -9) a -= 7 * inp.brake; }
+    if (inp.brake > 0) { if (v > 0.5) a -= 22 * inp.brake * (this.tr.wbrake ?? 1); else if (v > -9) a -= 7 * inp.brake; }
     if (!inp.throttle && !inp.brake) a -= Math.sign(v) * 2.0; // freio-motor
     if (v > vmax && !nitroOn) a -= (v - vmax) * 1.5;
     a -= 0.00035 * v * Math.abs(v);
@@ -348,7 +373,7 @@ export class Car {
     this.psi += (omega - f.kg * vs) * dt;
     this.beta -= f.kg * vs * dt;
     // aderência: a direção da velocidade segue o bico do carro até o limite dos pneus
-    const grip = sp.grip * (inp.handbrake ? 0.45 : 1);
+    const grip = sp.grip * (this.tr.wgrip ?? 1) * (inp.handbrake ? 0.45 : 1);
     const k = Math.min(1, (5.5 + 4 * grip) * grip * dt);
     let dBeta = (this.psi - this.beta) * k;
     const load = Math.max(0, G * f.U[1] + vs * vs * f.kn);       // carga nos pneus (crista alivia, loop/vale aumenta)
@@ -503,7 +528,7 @@ export function autopilot(car) {
   for (let k = 0; k < 140; k += 3) {
     const f = frameAt(tr, car.s + k);
     const kg = Math.abs(f.kg);
-    if (kg > 1e-4) { const vc = Math.sqrt((TIRE_MU * sp.grip * G * f.U[1] + G * Math.abs(f.R[1])) / kg) * 0.97; vlim = Math.min(vlim, Math.sqrt(vc * vc + 2 * 16 * k)); }
+    if (kg > 1e-4) { const vc = Math.sqrt((TIRE_MU * sp.grip * (tr.wgrip ?? 1) * G * f.U[1] + G * Math.abs(f.R[1])) / kg) * 0.97; vlim = Math.min(vlim, Math.sqrt(vc * vc + 2 * 16 * (tr.wbrake ?? 1) * k)); }
   }
   const f = frameAt(tr, car.s);
   const want = Math.atan(car.d * 0.12) * 0.9;
