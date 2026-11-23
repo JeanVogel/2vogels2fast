@@ -906,7 +906,7 @@ const CAR_TRIM = {
   p308: { plate: { kind: 'mercosul', text: 'BBS3A98' }, plateF: [0, 0.36, 2.335], plateR: [0, 0.8, -1.9], plateTilt: [0, 0.05],
     tint: 0.85, paint: { color: '#eeeeec', metalness: 0.05, roughness: 0.25 }, wheel: 'model', wOff: 0, dims: [1.82, 4.28] },
   // Honda City Hatch branco: modelo 3D do usuário (malha única com textura; peças separadas pela cor da textura), placa real
-  city: { plate: { kind: 'mercosul', text: 'RXP9C72' }, plateF: [0, 0.43, 2.115], plateR: [0, 0.76, -2.035], plateTilt: [0, 0.1],
+  city: { plate: { kind: 'mercosul', text: 'RXP9C72' }, plateF: [0, 0.47, 2.145], plateR: [0, 0.8, -2.03], plateTilt: [0, 0.1],
     tint: 0.85, rim: '#2a2b2e', paint: { color: '#f0f0ee', metalness: 0.05, roughness: 0.25 }, wheel: 'model', wOff: 0, dims: [1.75, 4.2] },
 };
 const plateTex = {};
@@ -956,7 +956,7 @@ function makePlate(cfg) {
 const realModels = {}, realLoading = {};
 function loadReal(file) {
   if (realLoading[file]) return realLoading[file];
-  return realLoading[file] = fetch(file).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(js => {
+  return realLoading[file] = fetch(file).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(async js => {
     const bin = atob(js.data), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); const buf = u8.buffer;
     const dv = new DataView(buf), hl = dv.getUint32(0, true);
     const h = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, hl))), base = 4 + hl, parts = {};
@@ -966,10 +966,14 @@ function loadReal(file) {
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       g.setAttribute('normal', new THREE.BufferAttribute(new Int8Array(buf, base + p.nOff, p.nv * 3), 3, true));
+      if (p.uOff != null) g.setAttribute('uv', new THREE.BufferAttribute(new Uint16Array(buf, base + p.uOff, p.nv * 2), 2, true));
       g.setIndex(new THREE.BufferAttribute(p.big ? new Uint32Array(buf, base + p.iOff, p.ni) : new Uint16Array(buf, base + p.iOff, p.ni), 1));
       g.computeBoundingSphere(); parts[p.name] = g;
     }
-    return realModels[file] = { parts, wheels: h.wheels };
+    // modelo com textura (o carro inteiro pintado numa imagem): carrega a imagem junto
+    let tex = null;
+    if (h.tex) tex = await new Promise(res => new THREE.TextureLoader().load(h.tex, t => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; res(t); }, undefined, () => res(null)));
+    return realModels[file] = { parts, wheels: h.wheels, tex };
   }).catch(e => { console.warn('modelo 3D indisponível', file, e); return null; });
 }
 function ensureModel(carId, ms = 8000) { const f = REAL_FILE[carId]; if (!f || realModels[f]) return Promise.resolve(); return Promise.race([loadReal(f), new Promise(r => setTimeout(r, ms))]); }
@@ -1083,12 +1087,16 @@ function buildRealCar(spec, rm, ghost) {
   body.position.y = trim.ride || 0;
   if (trim.tint) { M.glass.color.set('#05070a'); M.glass.opacity = trim.tint; }
   const gmat = ghost ? new THREE.MeshBasicMaterial({ color: '#2be4ff', transparent: true, opacity: 0.3, depthWrite: false }) : null;
+  if (rm.tex) {
+    M.tex = new THREE.MeshPhysicalMaterial({ map: rm.tex, roughness: 0.42, metalness: 0.05, clearcoat: 0.6, clearcoatRoughness: 0.2, envMap: envTex, envMapIntensity: envI * 0.5 });
+    M.wtex = new THREE.MeshStandardMaterial({ map: rm.tex, roughness: 0.6, metalness: 0.2, envMap: envTex, envMapIntensity: envI * 0.3 });
+  }
   for (const [name, geo] of Object.entries(rm.parts)) {
-    if (/^(wheel|wtire|wrim)_/.test(name)) continue;
+    if (/^(wheel|wtire|wrim|wtex)_/.test(name)) continue;
     if (ghost && (name === 'interior' || name === 'glass' || name === 'lens' || name === 'taillens')) continue;
     if (name === 'badge' && trim.badge === false) continue;
     const m = new THREE.Mesh(geo, ghost ? gmat : M[name] || M.black);
-    m.castShadow = !ghost && (name === 'paint' || name === 'black' || name === 'mirror'); if (name === 'glass' || name === 'lens' || name === 'taillens') m.renderOrder = 2;
+    m.castShadow = !ghost && (name === 'paint' || name === 'black' || name === 'mirror' || name === 'tex'); if (name === 'glass' || name === 'lens' || name === 'taillens') m.renderOrder = 2;
     body.add(m);
   }
   const wheels = [], wk = trim.wheel === 'audi10' ? AUDI_WHEEL : trim.wheel === 'model' ? { id: 'model', R: rm.wheels.lf[1], w: 0.19 } : VTR_WHEEL, wOff = trim.wOff ?? 0.03;
@@ -1101,7 +1109,7 @@ function buildRealCar(spec, rm, ghost) {
     if (ghost) { const t = new THREE.Mesh(new THREE.CylinderGeometry(wk.R, wk.R, wk.w, 20).rotateZ(Math.PI / 2), gmat); spin.add(t); }
     else {
       if (wk.id !== 'model') spin.add(sportWheel(side, wk));
-      for (const [pre, mat] of [['wheel_', M.metal], ['wtire_', M.wtire], ['wrim_', M.wrim]]) if (rm.parts[pre + c]) { const m = new THREE.Mesh(rm.parts[pre + c], mat); m.position.x = -side * wOff; m.castShadow = pre === 'wtire_'; spin.add(m); }
+      for (const [pre, mat] of [['wheel_', M.metal], ['wtire_', M.wtire], ['wrim_', M.wrim], ['wtex_', M.wtex]]) if (rm.parts[pre + c]) { const m = new THREE.Mesh(rm.parts[pre + c], mat); m.position.x = -side * wOff; m.castShadow = pre === 'wtire_'; spin.add(m); }
     }
     root.add(w); wheels.push({ g: w, spin, front: c[1] === 'f' });
   }
