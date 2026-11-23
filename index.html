@@ -859,6 +859,12 @@ function buildCarMesh(spec, ghost = false) {
     const t = new THREE.Mesh(tg, tire); t.castShadow = true; spin.add(t); spin.add(new THREE.Mesh(rg, rim));
     root.add(w); wheels.push({ g: w, spin, front: sz > 0 });
   }
+  // placa nos carros sem modelo 3D, quando conhecida
+  const ptrim = CAR_TRIM[spec.id];
+  if (!ghost && ptrim && ptrim.plate) {
+    const pf = makePlate(ptrim.plate); pf.position.set(0, p.clr + 0.16, p.L / 2 + 0.095); body.add(pf);
+    const pr = makePlate(ptrim.plate); pr.position.set(0, p.clr + 0.16, -p.L / 2 - 0.095); pr.rotation.y = Math.PI; body.add(pr);
+  }
   const { glow, flames } = ghost ? { glow: null, flames: [] } : addExtras(root, spec, p.W, p.L, p.clr);
   root.userData = { wheels, body, glow, flames, p, spinA: 0 };
   return root;
@@ -888,17 +894,19 @@ const CAR_TRIM = {
   // Peugeot 206 1.0 16v prata: modelo 3D do usuário, com as rodas e pneus do próprio modelo; placa cinza fictícia
   p206: { plate: { kind: 'cinza', text: 'VGL-0206', city: 'SC - FLORIANÓPOLIS' }, plateF: [0, 0.37, 1.958], plateR: [0, 0.8, -1.94], plateTilt: [0, 0.04],
     tint: 0.7, paint: { color: '#b9bec6', metalness: 0.6, roughness: 0.3 }, caliper: '#3a3c40', wheel: 'model', wOff: 0, dims: [1.65, 3.84] },
-  // Renault Mégane Grand Tour preta: modelo 3D do usuário (perua da 2ª geração), rodas do próprio modelo; placa fictícia
-  megane: { plate: { kind: 'cinza', text: 'VGL-2012', city: 'SC - FLORIANÓPOLIS' }, plateF: [0, 0.45, 2.258], plateR: [0, 0.63, -2.19], plateTilt: [0, 0],
+  // Escort Hobby: ainda sem modelo 3D (desenho do jogo), só a placa real
+  escort: { plate: { kind: 'cinza', text: 'LZE-5070', city: 'SC - FLORIANÓPOLIS' } },
+  // Renault Mégane Grand Tour preta: modelo 3D do usuário (perua da 2ª geração), rodas do próprio modelo; placa real
+  megane: { plate: { kind: 'cinza', text: 'MKB-4894', city: 'SC - FLORIANÓPOLIS' }, plateF: [0, 0.45, 2.258], plateR: [0, 0.63, -2.19], plateTilt: [0, 0],
     tint: 0.8, blackPaint: true, wheel: 'model', wOff: 0, dims: [1.78, 4.5] },
   // Peugeot 307 Rallye cinza: modelo 3D do usuário (307 5 portas pré-facelift), rodas do próprio modelo; placa fictícia
   p307: { plate: { kind: 'cinza', text: 'VGL-2004', city: 'SC - FLORIANÓPOLIS' }, plateF: [0, 0.565, 2.085], plateR: [0, 0.6, -2.08], plateTilt: [0, 0],
     tint: 0.75, chrome: 'alu', paint: { color: '#6a6e75', metalness: 0.6, roughness: 0.32 }, wheel: 'model', wOff: 0, dims: [1.75, 4.2] },
-  // Peugeot 308 THP branco: modelo 3D do usuário (308 1ª geração), rodas do próprio modelo repetidas nas quatro posições; placa Mercosul fictícia
-  p308: { plate: { kind: 'mercosul', text: 'VGL2O16' }, plateF: [0, 0.36, 2.335], plateR: [0, 0.8, -1.9], plateTilt: [0, 0.05],
+  // Peugeot 308 THP branco: modelo 3D do usuário (308 1ª geração), rodas do próprio modelo repetidas nas quatro posições; placa real
+  p308: { plate: { kind: 'mercosul', text: 'BBS3A98' }, plateF: [0, 0.36, 2.335], plateR: [0, 0.8, -1.9], plateTilt: [0, 0.05],
     tint: 0.85, paint: { color: '#eeeeec', metalness: 0.05, roughness: 0.25 }, wheel: 'model', wOff: 0, dims: [1.82, 4.28] },
-  // Honda City Hatch branco: modelo 3D do usuário (malha única com textura; peças separadas pela cor da textura), placa Mercosul fictícia
-  city: { plate: { kind: 'mercosul', text: 'VGL2C22' }, plateF: [0, 0.43, 2.115], plateR: [0, 0.76, -2.035], plateTilt: [0, 0.1],
+  // Honda City Hatch branco: modelo 3D do usuário (malha única com textura; peças separadas pela cor da textura), placa real
+  city: { plate: { kind: 'mercosul', text: 'RXP9C72' }, plateF: [0, 0.43, 2.115], plateR: [0, 0.76, -2.035], plateTilt: [0, 0.1],
     tint: 0.85, rim: '#2a2b2e', paint: { color: '#f0f0ee', metalness: 0.05, roughness: 0.25 }, wheel: 'model', wOff: 0, dims: [1.75, 4.2] },
 };
 const plateTex = {};
