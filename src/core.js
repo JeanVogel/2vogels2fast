@@ -31,6 +31,7 @@ export const CARS = [
   mk('p206', 'Peugeot 206', 2002, '1.0 16v · 70 cv', 70, 950, 163, '#b9bec6', 'Prata', 'hatch5', { steer: 1.1 }),
   mk('golf', 'Volkswagen Golf', 2001, '1.6 · 101 cv', 101, 1180, 185, '#1d5a3a', 'Verde', 'hatch5b', { grip: 1.05 }),
   mk('p307', 'Peugeot 307 Rallye', 2004, '2.0 16v · 138 cv', 138, 1280, 204, '#6a6e75', 'Cinza', 'hatchTall', { steer: 1.05 }),
+  mk('city', 'Honda City Hatch', 2022, '1.5 i-VTEC · 126 cv', 126, 1140, 190, '#f0f0ee', 'Branco', 'hatch5', { steer: 1.05 }),
   mk('p308', 'Peugeot 308 THP', 2016, '1.6 THP · 173 cv', 173, 1310, 218, '#e8e8e6', 'Branco', 'hatch5', { steer: 1.05 }),
   mk('megane', 'Renault Mégane Grand Tour', 2012, '1.6 · 115 cv', 115, 1300, 186, '#121316', 'Preta', 'wagon', { steer: 0.95 }),
   mk('rsq3', 'Audi RS Q3', 2016, '2.5 TFSI · 340 cv', 340, 1700, 250, '#b00018', 'Vermelha', 'suv', { grip: 1.15, steer: 0.95 }),

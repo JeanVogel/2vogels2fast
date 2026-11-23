@@ -13,7 +13,7 @@ if site:
     if os.path.exists(cfg):
         html = html.replace('<script type="module">', '<script>window.VR_FIREBASE = ' + json.dumps(json.load(open(cfg))) + ';</script>\n<script type="module">', 1)
     os.makedirs('site', exist_ok=True)
-    for f in ['c4vts.json', 'rsq3.json', 'p206.json', 'megane.json', 'p307.json', 'p308.json', 'abertura.jpg', 'logo.webp']: shutil.copy(f, 'site/' + f)
+    for f in ['c4vts.json', 'rsq3.json', 'p206.json', 'megane.json', 'p307.json', 'p308.json', 'city.json', 'abertura.jpg', 'logo.webp']: shutil.copy(f, 'site/' + f)
     open('site/index.html', 'w').write(html)
 else:
     open('dist.html' if prod else 'index.html', 'w').write(html)
