@@ -1734,11 +1734,13 @@ function frame(now) {
 }
 
 // ================= JOGADORES / RODADAS / BANCO =================
-// Cada desafio é uma rodada: todos os jogadores cadastrados quando ela é lançada correm a mesma pista com o mesmo carro,
-// uma vez cada. Quem fizer o melhor tempo lança a próxima. Rodada parada há mais de ROUND_DAYS fecha com os pendentes como "não correu".
+// Cada desafio é uma rodada: todos correm a mesma pista com o mesmo carro, uma vez cada. A rodada fecha quando o Pai e o
+// Filho tiverem corrido (os convidados correm enquanto ela estiver aberta). Melhor tempo vence e lança a próxima.
+// Rodada parada há mais de ROUND_DAYS fecha sozinha.
 const DEFAULT_PLAYERS = [{ id: 'pai', name: 'Vogel Pai', color: '#ff7a1a', order: 1 }, { id: 'filho', name: 'Vogel Filho', color: '#2be4ff', order: 2 }];
 const PALETTE = ['#3dff9a', '#ffd23f', '#ff2a6d', '#b04dff', '#7fd4ff', '#ff9ad5', '#c6ff3d'];
 const ROUND_DAYS = 7;
+const CORE = ['pai', 'filho']; // a rodada só espera por eles
 const DB = { db: null, ready: false, duels: [], players: DEFAULT_PLAYERS.slice(), playersReady: false, playersErr: null, local: false };
 const PL = id => DB.players.find(p => p.id === id) || DEFAULT_PLAYERS.find(p => p.id === id) || { id, name: id, color: '#cccccc' };
 const pname = id => PL(id).name;
@@ -1781,7 +1783,7 @@ async function initDB() {
   const to = setTimeout(() => { if (!DB.ready) { DB.ready = true; DB.offline = true; render(); } }, 10000);
   DB.db.collection('duels').orderBy('n', 'desc').limit(300).onSnapshot(snap => {
     DB.duels = snap.docs.map(d => ({ id: d.id, ...d.data() })); if (!snap.metadata.fromCache) { clearTimeout(to); DB.offline = false; }
-    DB.ready = true; render();
+    DB.ready = true; if (!snap.metadata.fromCache) finalizeExpired(); render();
   }, err => { clearTimeout(to); DB.ready = true; DB.err = err.code; render(); });
   DB.db.collection('players').orderBy('order', 'asc').limit(50).onSnapshot(snap => {
     const list = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -1814,8 +1816,8 @@ function decide(d) {
   if (Array.isArray(d.winners)) return { winners: d.winners, next: d.winner || d.challenger };
   if (d.winner && d.winner !== 'empate') return { winners: [d.winner], next: d.winner }; // duelos antigos
   if (d.winner === 'empate') return { winners: partsOf(d).slice(), next: d.challenger === 'pai' ? 'filho' : 'pai' };
-  const ps = partsOf(d);
-  if (ps.some(id => !finished(d[id])) && !expired(d)) return null;
+  const ps = partsOf(d), core = ps.filter(id => CORE.includes(id)), wait = core.length ? core : ps;
+  if (wait.some(id => !finished(d[id])) && !expired(d)) return null;
   const best = Math.min(...ps.map(id => tval(d[id])));
   if (!isFinite(best)) return { winners: [], next: d.challenger };
   const winners = ps.filter(id => Math.abs(tval(d[id]) - best) < 0.005);
@@ -1825,11 +1827,13 @@ function decide(d) {
 const listJoin = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' e ' + a[a.length - 1];
 // posição com empate: 1 + quantos fizeram tempo melhor
 const placeOf = (d, id) => { const t = tval(d[id]); return isFinite(t) ? 1 + partsOf(d).filter(x => tval(d[x]) < t - 0.0049).length : null; };
-function standings(d) { return partsOf(d).map(id => ({ id, run: d[id] || null })).sort((a, b) => tval(a.run) - tval(b.run) || (finished(b.run) - finished(a.run))); }
+const coreOf = d => { const c = partsOf(d).filter(id => CORE.includes(id)); return c.length ? c : partsOf(d); };
+// classificação; com a rodada fechada, quem não correu (e não é Pai/Filho) não aparece
+function standings(d) { const closed = !!(d.winners || d.winner) || !!decide(d); return partsOf(d).filter(id => d[id] || !closed || CORE.includes(id)).map(id => ({ id, run: d[id] || null })).sort((a, b) => tval(a.run) - tval(b.run) || (finished(b.run) - finished(a.run))); }
 function leader(d, except) { let b = null; for (const id of partsOf(d)) { if (id === except) continue; const r = d[id]; if (r && r.state === 'done' && (!b || r.time < b.run.time)) b = { id, run: r }; } return b; }
 function scoreboard() {
   const s = {}; for (const p of DB.players) s[p.id] = { wins: 0, played: 0 };
-  for (const d of DB.duels) { const r = decide(d); if (!r) continue; for (const id of partsOf(d)) { s[id] = s[id] || { wins: 0, played: 0 }; if (finished(d[id]) || expired(d)) s[id].played++; } for (const w of r.winners) { s[w] = s[w] || { wins: 0, played: 0 }; s[w].wins++; } }
+  for (const d of DB.duels) { const r = decide(d); if (!r) continue; for (const id of partsOf(d)) { s[id] = s[id] || { wins: 0, played: 0 }; if (finished(d[id])) s[id].played++; } for (const w of r.winners) { s[w] = s[w] || { wins: 0, played: 0 }; s[w].wins++; } }
   return s;
 }
 function duelState(me) {
@@ -1841,12 +1845,12 @@ function duelState(me) {
   const mine = (last[me] || {}).state;
   if (!mine) return { kind: 'run', duel: last };
   if (mine === 'started') return { kind: 'abandoned', duel: last };
-  return { kind: 'waiting', duel: last, pending: ps.filter(id => !finished(last[id])) };
+  return { kind: 'waiting', duel: last, pending: coreOf(last).filter(id => !finished(last[id])) };
 }
-// rodada vencida pelo prazo: quem abrir o jogo registra o resultado
+// rodada encerrada (Pai e Filho correram, ou prazo vencido) sem resultado gravado: quem abrir o jogo registra
 function finalizeExpired() {
-  const last = DB.duels[0]; if (!last || last.winners || DB.finalizing === last.id) return;
-  const res = decide(last); if (!res || !expired(last)) return;
+  const last = DB.duels[0]; if (!last || last.winners || DB.finalizing === last.id || !DB.ready) return;
+  const res = decide(last); if (!res) return;
   DB.finalizing = last.id; dbSetDuel(last.id, { winner: res.next, winners: res.winners }, true).catch(() => {});
 }
 
@@ -1856,7 +1860,7 @@ function waChallenge(d) {
   const car = carById(d.car), b = leader(d);
   return `🏁 *2 Vogels 2 Fast* · Desafio nº ${d.n}!\n${pname(d.challenger)} lançou o desafio com o ${car.name} ${car.year}.\n`
     + (b ? `Tempo a bater: ${fmt(b.run.time)} (${pname(b.id)})` : 'Ninguém completou ainda: basta terminar a pista para liderar.')
-    + `\nTodos correm uma vez; quem vencer lança o próximo. Bora: ${SITE_URL}`;
+    + `\nCada um corre uma vez; o desafio fecha quando o Pai e o Filho tiverem corrido, e quem vencer lança o próximo. Bora: ${SITE_URL}`;
 }
 function waResult(d, res) {
   const head = !res.winners.length ? 'ninguém concluiu' : res.winners.length > 1 ? `empate entre ${listJoin(res.winners.map(pname))}` : `${pname(res.winners[0])} venceu`;
@@ -1871,7 +1875,6 @@ function render() {
   if (Game.race || UI.activeRace) return;
   const el = $('#screen'); el.classList.remove('hidden');
   if (UI.splash || !UI.who || !isUnlocked(UI.who)) { el.innerHTML = splashView(); bindWho(); const pi = $('#pinIn'); if (pi) pi.focus(); return; }
-  finalizeExpired();
   const v = UI.view;
   el.innerHTML = v === 'home' ? homeView() : v === 'cars' ? carsView() : v === 'track' ? trackView() : v === 'history' ? historyView() : v === 'help' ? helpView() : v === 'result' ? resultView() : v === 'invite' ? inviteView() : homeView();
   bind();
@@ -1945,7 +1948,7 @@ function homeView() {
       const d = st.duel, car = carById(d.car), b = leader(d, me);
       const info = `<div class="muted">Desafio nº ${d.n} de ${esc(pname(d.challenger))} · ${car.name} ${car.year} ${car.colorName.toLowerCase()} · pista #${d.seed}</div>`;
       if (st.kind === 'run') action = `<div class="state"><div class="big">${esc(pname(d.challenger))} lançou o desafio nº ${d.n}! ${b ? 'Tempo a bater: ' + fmt(b.run.time) + ' (' + esc(pshort(b.id)) + ')' : 'Ninguém completou ainda.'}</div>${info}<div class="warn" style="margin-top:6px">Você terá uma única tentativa.</div></div><button class="btn" data-go="respond">Ver a pista e correr</button>`;
-      else if (st.kind === 'waiting') action = `<div class="state cy"><div class="big">Seu tempo: ${tmTxt(d[me])}. Faltam correr: ${st.pending.map(id => esc(pshort(id))).join(', ')}.</div>${info}</div>${standingsHTML(d)}${waBtn(waChallenge(d), 'Avisar no WhatsApp')}`;
+      else if (st.kind === 'waiting') action = `<div class="state cy"><div class="big">Seu tempo: ${tmTxt(d[me])}. Falta correr: ${esc(listJoin(st.pending.map(pname)))}.</div>${info}<div class="muted">O desafio fecha quando o Pai e o Filho tiverem corrido; os convidados correm até lá.</div></div>${standingsHTML(d)}${waBtn(waChallenge(d), 'Avisar no WhatsApp')}`;
       else if (st.kind === 'abandoned') action = `<div class="state"><div class="big">Sua corrida do desafio nº ${d.n} foi interrompida.</div><div class="muted">Pela regra de uma tentativa, ela conta como não concluída.</div></div><button class="btn" data-go="markdnf">Entendi</button>`;
       else action = `<div class="state cy"><div class="big">Desafio nº ${d.n} em andamento.</div>${info}<div class="muted">Você entrou depois que ele foi lançado: participa a partir do próximo.</div></div>${standingsHTML(d)}`;
     }
@@ -2012,7 +2015,7 @@ function helpView() {
   ${k('<kbd>R</kbd>', 'Voltar ao último checkpoint')}${k('<kbd>Esc</kbd>', 'Pausa')}${k('<kbd>M</kbd>', 'Liga/desliga o som')}</div>
   <h3 style="margin-top:18px">No celular</h3><p class="muted">Deite o celular. ◀ ▶ à esquerda para virar; à direita, acelerar, frear (e ré), NOS e freio de mão. No alto: câmera, checkpoint e pausa. Na pausa dá para trocar a direção para "inclinar", virando o celular como um volante. Um controle Bluetooth também funciona. No histórico, 📱 ⌨️ 🎮 mostram com o que cada um correu.</p>
   <h3>Controle de videogame</h3><p class="muted">Gatilho direito acelera, esquerdo freia, analógico esquerdo vira, A ou RB = nitro, X = freio de mão, Y = checkpoint, LB = câmera, Start = pausa.</p>
-  <h3>Desafios</h3><p class="muted">Quem lança escolhe o carro e a pista; todos os jogadores correm uma vez, com o mesmo carro, contra o ghost do melhor tempo até ali. Quem fizer o melhor tempo vence e lança o próximo. Se alguém não correr em ${ROUND_DAYS} dias, o desafio fecha sem ele.</p>
+  <h3>Desafios</h3><p class="muted">Quem lança escolhe o carro e a pista; cada jogador corre uma vez, com o mesmo carro, contra o ghost do melhor tempo até ali. O desafio fecha quando o Pai e o Filho tiverem corrido: os convidados precisam correr antes disso. Quem fizer o melhor tempo vence e lança o próximo. Se ficar parado ${ROUND_DAYS} dias, fecha sozinho.</p>
   <h3>Batidas</h3><p class="muted">Cada segundo batendo ou raspando na mureta vale 1 ponto (uma pancada rápida já conta 1). No final, cada ponto soma 1 s ao tempo. Frear antes da curva compensa!</p>
   <h3>Dicas</h3><p class="muted">Loops pedem velocidade: entre embalado. Nos saltos, chegue reto e rápido. Se cair ou capotar, o carro volta ao último checkpoint e o tempo continua correndo.</p>
   <div class="row"><button class="btn alt" data-go="home">Voltar</button></div></div></div>`;
@@ -2127,10 +2130,10 @@ function showRunResult(d, me, res) {
       sub: (res ? penLine(res) + ' · ' : '') + (r.winners.length > 1 ? `Empate na ponta: ${listJoin(r.winners.map(pname))}. ` : r.winners.length ? `Vencedor: ${pname(r.winners[0])}. ` : 'Ninguém concluiu. ') + `Próximo desafio é do ${pname(r.next)}.`,
       table: standingsHTML(d), score: sc, wa: waResult(d, r), waLabel: 'Contar o resultado no WhatsApp' };
   } else {
-    const pend = partsOf(d).filter(id => !finished(d[id]));
+    const pend = coreOf(d).filter(id => !finished(d[id]));
     UI.result = { title: mine.state === 'done' ? 'TEMPO REGISTRADO' : 'DESISTÊNCIA', color: mine.state === 'done' ? '#ff7a1a' : '#ff2a6d',
       line: mine.state === 'done' ? fmt(mine.time) : 'A corrida conta como não concluída.',
-      sub: (res ? penLine(res) + ' · ' : '') + (mine.state === 'done' ? `Por enquanto você está em ${pos}º. ` : '') + `Faltam correr: ${listJoin(pend.map(pname))}.`,
+      sub: (res ? penLine(res) + ' · ' : '') + (mine.state === 'done' ? `Por enquanto você está em ${pos}º. ` : '') + `Falta correr: ${listJoin(pend.map(pname))}. O desafio fecha quando ${pend.length > 1 ? 'eles correrem' : 'ele correr'}; os convidados correm até lá.`,
       table: standingsHTML(d), wa: waChallenge(d), waLabel: 'Avisar no WhatsApp' };
   }
   UI.view = 'result'; render(); Game.startAttract();
